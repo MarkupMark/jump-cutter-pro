@@ -313,7 +313,12 @@ export default class Lookahead {
     // For better performance. TODO however I'm not sure if this can significantly affect volume readings.
     // On one hand we could say "we don't change the waveform, we're just processing it faster", on the other hand
     // frequency characteristics are changed, and there's a risk of exceeding the Nyquist frequency.
-    (clone as any).preservesPitch = false;
+    if ('preservesPitch' in clone) {
+      (clone as any).preservesPitch = false;
+    }
+    if ('mozPreservesPitch' in clone) {
+      (clone as any).mozPreservesPitch = false;
+    }
 
     // It's a bit weird that it's not at the very bottom of the function. TODO?
     await Promise.all(toAwait);

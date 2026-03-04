@@ -54,8 +54,10 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     HotkeyAction_INCREASE_MARGIN_AFTER,
     HotkeyAction_DECREASE_MARGIN_AFTER,
     HotkeyAction_TOGGLE_MARGIN_AFTER,
+    HotkeyAction_TOGGLE_MARGIN_AFTER,
     HotkeyAction_SET_MARGIN_AFTER,
     HotkeyAction_TOGGLE_PAUSE,
+    HotkeyAction_RESET_TIME_SAVED,
     HotkeyBinding,
     NonSettingsAction
   } from '@/hotkeys';
@@ -74,6 +76,9 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   type RequiredSettings =
     Pick<Settings,
       'enabled'
+      | 'muteSilences'
+      | 'transientNoiseFilterEnabled'
+      | 'transientNoiseFilterMinSoundedDurationMs'
       | 'applyTo'
       | 'popupAutofocusEnabledInput'
       | 'enableHotkeys'
@@ -116,6 +121,15 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     }
   }
   async function getTab() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('tabId')) {
+      try {
+        const tabId = parseInt(urlParams.get('tabId')!, 10);
+        return await browserOrChrome.tabs.get(tabId);
+      } catch (e) {
+        // Fallback to active tab query
+      }
+    }
     // TODO but what about Kiwi browser? It always opens popup on a separate page. And in general, it's not always
     // guaranteed that there will be a tab, is it?
     const tabs = await browserOrChrome.tabs.query({ active: true, currentWindow: true, });
@@ -591,6 +605,30 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     >
       {#if settings.advancedMode}
       <div style="margin-bottom: 0.375rem;">
+        <!-- Detach button -->
+        <button
+          on:click={async () => {
+            const width = window.outerWidth || 400;
+            const height = window.outerHeight || 600;
+            const currentTab = await tabPromise;
+            const url = new URL(window.location.href);
+            if (currentTab && currentTab.id) {
+              url.searchParams.set('tabId', currentTab.id.toString());
+            }
+            browserOrChrome.windows.create({
+              url: url.href,
+              type: 'popup',
+              width: width,
+              height: height
+            });
+            window.close();
+          }}
+          use:tippy={{
+            content: () => getMessage('detachPopup') || 'Stacca in nuova finestra',
+            theme: 'my-tippy',
+          }}
+          style="padding: 0; margin-right: 0.25rem;"
+        >🗗</button>
         <!-- TODO but this is technically a button. Is this ok? -->
         <button
           on:click={() => {
@@ -628,6 +666,12 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
             {latestTelemetryRecord}
             {settings}
             onSettingsChange={updateSettingsLocalCopyAndStorage}
+            onResetTimeSaved={() => {
+              nonSettingsActionsPort?.postMessage([{
+                action: HotkeyAction_RESET_TIME_SAVED,
+                keyCombination: { code: 'stub' },
+              }]);
+            }}
           />
         {/await}
       </div>
@@ -951,8 +995,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       theme: tippyThemeMyTippyAndPreLine,
     }}
   />
-  {/if}
-  {#if settings.advancedMode}
   <RangeSlider
     label="⏩ {getMessage('silenceSpeed')} ({silenceSpeedLabelClarification})"
     fractionalDigits={2}
@@ -987,6 +1029,55 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       theme: tippyThemeMyTippyAndPreLine,
     }}
   />
+  <label
+    style="margin-top: 1rem; display: inline-flex; align-items: center;"
+  >
+    <input
+      type="checkbox"
+      bind:checked={settings.muteSilences}
+      on:change={createOnInputListener('muteSilences')}
+      disabled={controllerTypeAlwaysSounded}
+      style="margin: 0 0.5rem 0 0;"
+    >
+    <span>🔇 {getMessage('muteSilences')}</span>
+  </label>
+  <label
+    style="margin-top: 0.5rem; display: inline-flex; align-items: center;"
+    use:tippy={{
+      content: () => getMessage('transientNoiseFilterEnabledTooltip') || 'Filter transient noises',
+      theme: 'my-tippy',
+    }}
+  >
+    <input
+      type="checkbox"
+      bind:checked={settings.transientNoiseFilterEnabled}
+      on:change={createOnInputListener('transientNoiseFilterEnabled')}
+      disabled={controllerTypeAlwaysSounded}
+      style="margin: 0 0.5rem 0 0;"
+    >
+    <span>🛡️ {getMessage('transientNoiseFilterEnabled')}</span>
+  </label>
+  {#if settings.transientNoiseFilterEnabled}
+  <label
+    style="margin-top: 0.25rem; display: inline-flex; align-items: center; gap: 0.5rem;"
+    use:tippy={{
+      content: () => getMessage('transientNoiseFilterMinSoundedDurationMsTooltip') || 'Min sounded duration',
+      theme: 'my-tippy',
+    }}
+  >
+    <span>{getMessage('transientNoiseFilterMinSoundedDurationMs')}:</span>
+    <input
+      type="number"
+      min="1"
+      max="500"
+      step="1"
+      bind:value={settings.transientNoiseFilterMinSoundedDurationMs}
+      on:input={createOnInputListener('transientNoiseFilterMinSoundedDurationMs')}
+      disabled={controllerTypeAlwaysSounded}
+      style="width: 5rem;"
+    >
+  </label>
+  {/if}
   <RangeSlider
     label="⏱️⬅️ {getMessage('marginBefore')}"
     {...rangeInputSettingNameToAttrs('MarginBefore', settings)}

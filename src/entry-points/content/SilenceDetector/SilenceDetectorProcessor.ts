@@ -28,11 +28,15 @@ let devErrorShown = false;
 
 /**
  * Takes volume data (e.g. from `VolumeFilter`) as input. Sends `SILENCE_START` when there has been silence for the
- * last `durationThreshold`, or `SILENCE_END` when a single sample above `volumeThreshold` is found.
+ * last `durationThreshold`, or `SILENCE_END` when loud samples have been sustained for at least `minSoundedDuration`
+ * (to filter out transient noises like mic taps or keyboard clicks).
  */
 class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
   _lastLoudSampleInd: AudioContextTime;
   _lastEmitedEventIsSilenceStartEvent: boolean;
+  /** How many consecutive loud samples we have seen since the last quiet sample. */
+  _consecutiveLoudSamples: number;
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   constructor(options: any) {
     super(options);
     const initialDuration = options.processorOptions?.initialDuration ?? 0;
@@ -42,7 +46,8 @@ class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
     const currSampleInd = currentFrame;
 
     this._lastLoudSampleInd = currSampleInd - initialDuration * sampleRate;
-    this._lastEmitedEventIsSilenceStartEvent = false
+    this._lastEmitedEventIsSilenceStartEvent = false;
+    this._consecutiveLoudSamples = 0;
   }
   static get parameterDescriptors() {
     return [
@@ -59,6 +64,14 @@ class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
         minValue: 0,
         automationRate: 'k-rate',
       },
+      {
+        // How long loud audio must be sustained (in seconds) before it is truly treated as "sounded" (transient filter).
+        // 0 = disabled (behave like before - immediately emit SILENCE_END on first loud sample).
+        name: 'minSoundedDuration',
+        defaultValue: 0,
+        minValue: 0,
+        automationRate: 'k-rate',
+      },
     ];
   }
 
@@ -69,6 +82,7 @@ class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
 
   process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: Record<string, Float32Array>) {
     const volumeThreshold = parameters.volumeThreshold[0];
+    const minSoundedDurationSamples = Math.round(parameters.minSoundedDuration[0] * sampleRate);
     const input = inputs[0];
     // TODO perf: can we stop checking this every time after we get an input connected?
     if (input.length === 0) {
@@ -100,7 +114,10 @@ class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
       const sample = channel[sampleI];
       const sampleIsLoud = sample >= volumeThreshold;
       if (sampleIsLoud) {
-        this._lastLoudSampleInd = sampleIGlobal;
+        this._consecutiveLoudSamples++;
+
+        // Always emit SILENCE_END on the very first loud sample so real speech starts immediately.
+        // We do NOT delay this by minSoundedDuration, so there is no "clipping" of speech starts.
         if (this._lastEmitedEventIsSilenceStartEvent) {
           const m: SilenceDetectorMessage = [
             SilenceDetectorEventType.SILENCE_END,
@@ -109,7 +126,21 @@ class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
           this.port.postMessage(m);
           this._lastEmitedEventIsSilenceStartEvent = false;
         }
+
+        // However, only update _lastLoudSampleInd once loud audio has been sustained for
+        // minSoundedDuration. This means brief transient noises (e.g. mic taps < N ms) do NOT
+        // reset the silence timer. Once the transient ends and silence returns,
+        // isPastDurationThreshold will be true almost immediately (because _lastLoudSampleInd
+        // was never updated) and SILENCE_START re-fires quickly, so the interruption is minimal.
+        // With muteSilences enabled the brief SILENCE_END→SILENCE_START cycle is mostly inaudible.
+        const isTrulySounded =
+          minSoundedDurationSamples === 0
+          || this._consecutiveLoudSamples >= minSoundedDurationSamples;
+        if (isTrulySounded) {
+          this._lastLoudSampleInd = sampleIGlobal;
+        }
       } else {
+        this._consecutiveLoudSamples = 0;
         if (
           !this._lastEmitedEventIsSilenceStartEvent
           && this.isPastDurationThreshold(sampleIGlobal, durationThresholdSamples)

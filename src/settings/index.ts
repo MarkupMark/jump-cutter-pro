@@ -43,6 +43,14 @@ export interface Settings {
   soundedSpeed: number,
   previousSoundedSpeed: number,
   enabled: boolean,
+  muteSilences: boolean,
+  /** Filter out brief loud transients (e.g. mic taps) shorter than this to avoid interrupting silence speedup. */
+  transientNoiseFilterEnabled: boolean,
+  /**
+   * Minimum duration (ms) that loud audio must be sustained before it is treated as truly "sounded" and
+   * stops the silence speedup. Only used when {@link transientNoiseFilterEnabled} is true.
+   */
+  transientNoiseFilterMinSoundedDurationMs: number,
   marginBefore: number,
   previousMarginBefore: number,
   marginAfter: number,

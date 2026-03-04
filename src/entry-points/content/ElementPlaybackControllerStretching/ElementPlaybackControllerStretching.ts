@@ -77,6 +77,9 @@ export type ControllerSettings =
     | 'marginBefore'
     | 'marginAfter'
     | 'enableDesyncCorrection'
+    | 'muteSilences'
+    | 'transientNoiseFilterEnabled'
+    | 'transientNoiseFilterMinSoundedDurationMs'
   > & {
     silenceSpeed: number,
     /**
@@ -159,6 +162,7 @@ export default class Controller {
     name: SpeedName,
   };
   _didNotDoDesyncCorrectionForNSpeedSwitches = 0;
+  _mutingGainNode?: GainNode;
   _analyzerOut?: AnalyserNode;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   _log?: (msg?: any) => void;
@@ -333,11 +337,15 @@ export default class Controller {
       await requestIdlePromise({ timeout: 5000 })
       volumeFilter.connect(silenceDetector);
     }));
-    toDestinationChainLastConnectedLink.connect(audioContext.destination);
+
+    this._mutingGainNode = audioContext.createGain();
+    toDestinationChainLastConnectedLink.connect(this._mutingGainNode);
+    this._mutingGainNode.connect(audioContext.destination);
 
     this._destroyedPromise.then(() => {
       mediaElementSource.disconnect();
       mediaElementSource.connect(audioContext.destination);
+      this._mutingGainNode!.disconnect();
     });
 
     if (isLogging(this)) {
@@ -534,6 +542,10 @@ export default class Controller {
 
     this._silenceDetectorNode.volumeThreshold = this.settings.volumeThreshold;
     this._silenceDetectorNode.durationThreshold = this._getSilenceDetectorNodeDurationThreshold();
+    this._silenceDetectorNode.minSoundedDuration =
+      this.settings.transientNoiseFilterEnabled
+        ? this.settings.transientNoiseFilterMinSoundedDurationMs / 1000
+        : 0;
     if (this.isStretcherEnabled()) {
       this._lookahead.delayTime.value = getOptimalLookaheadDelay(
         this.settings.marginBefore,
@@ -590,6 +602,23 @@ export default class Controller {
     );
     setPlaybackRateAndRememberIt(this.element, speedVal);
     const elementSpeedSwitchedAt = this.audioContext!.currentTime;
+
+    // Disabling pitch correction during silence to prevent high-pitched metallic artifacts
+    if ('preservesPitch' in this.element) {
+      (this.element as any).preservesPitch = speedName === SpeedName.SOUNDED;
+    }
+    if ('mozPreservesPitch' in this.element) {
+      (this.element as any).mozPreservesPitch = speedName === SpeedName.SOUNDED;
+    }
+
+    if (this._mutingGainNode) {
+      const targetGain = (speedName === SpeedName.SILENCE && this.settings.muteSilences) ? 0 : 1;
+      // We still update the value but avoid ramping explicitly for performance if it's already at target
+      // Actually audio nodes are efficient, but cancelScheduledValues is cheap anyway
+      this._mutingGainNode.gain.cancelScheduledValues(elementSpeedSwitchedAt);
+      this._mutingGainNode.gain.setValueAtTime(this._mutingGainNode.gain.value, elementSpeedSwitchedAt);
+      this._mutingGainNode.gain.linearRampToValueAtTime(targetGain, elementSpeedSwitchedAt + 0.01);
+    }
 
     if (IS_DEV_MODE) {
       if (speedName === SpeedName.SOUNDED) {

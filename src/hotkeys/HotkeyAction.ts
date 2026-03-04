@@ -60,6 +60,7 @@ export const enum HotkeyAction {
   TOGGLE_MUTE = 'mute_toggle',
   INCREASE_VOLUME = 'volume+',
   DECREASE_VOLUME = 'volume-',
+  RESET_TIME_SAVED = 'time_saved_reset',
 }
 
 export const HotkeyAction_INCREASE_VOLUME = HotkeyAction.INCREASE_VOLUME;
@@ -90,4 +91,5 @@ export const HotkeyAction_DECREASE_MARGIN_AFTER = HotkeyAction.DECREASE_MARGIN_A
 export const HotkeyAction_TOGGLE_MARGIN_AFTER = HotkeyAction.TOGGLE_MARGIN_AFTER;
 export const HotkeyAction_SET_MARGIN_AFTER = HotkeyAction.SET_MARGIN_AFTER;
 
-export const HotkeyAction_TOGGLE_PAUSE = HotkeyAction.TOGGLE_PAUSE
+export const HotkeyAction_TOGGLE_PAUSE = HotkeyAction.TOGGLE_PAUSE;
+export const HotkeyAction_RESET_TIME_SAVED = HotkeyAction.RESET_TIME_SAVED;

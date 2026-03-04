@@ -58,6 +58,9 @@ export type ControllerSettings =
     | 'marginBefore'
     | 'marginAfter'
     | 'enableDesyncCorrection'
+    | 'muteSilences'
+    | 'transientNoiseFilterEnabled'
+    | 'transientNoiseFilterMinSoundedDurationMs'
   > & {
     silenceSpeed: number,
     /**
@@ -176,6 +179,7 @@ export default class Controller {
   private _destroyedPromise = new Promise<void>(r => this._resolveDestroyedPromise = r);
   audioContext: AudioContext;
   getVolume: () => number = () => 0;
+  _userMutedState: boolean | undefined;
   _lastSilenceSkippingSeek: TimeRange | undefined;
   _lastActualPlaybackRateChange: {
     time: AudioContextTime,
@@ -250,6 +254,9 @@ export default class Controller {
     this._destroyedPromise.then(() => {
       setPlaybackRateAndRememberIt(element, elementPlaybackRateBeforeInitialization);
       setDefaultPlaybackRateAndRememberIt(element, elementDefaultPlaybackRateBeforeInitialization);
+      if (this._userMutedState !== undefined) {
+        element.muted = this._userMutedState;
+      }
     });
 
     toAwait.push(this.lookahead!.ensureInit().then(() => {
@@ -857,6 +864,28 @@ export default class Controller {
     );
     setPlaybackRateAndRememberIt(this.element, speedVal);
     const elementSpeedSwitchedAt = this.audioContext.currentTime;
+
+    // Disabling pitch correction during silence to prevent high-pitched metallic artifacts
+    if ('preservesPitch' in this.element) {
+      (this.element as any).preservesPitch = speedName === SpeedName.SOUNDED;
+    }
+    if ('mozPreservesPitch' in this.element) {
+      (this.element as any).mozPreservesPitch = speedName === SpeedName.SOUNDED;
+    }
+
+    if (speedName === SpeedName.SILENCE) {
+      if (this._userMutedState === undefined) {
+        this._userMutedState = this.element.muted;
+      }
+      if (this.settings.muteSilences) {
+        this.element.muted = true;
+      }
+    } else {
+      if (this.settings.muteSilences && this._userMutedState !== undefined) {
+        this.element.muted = this._userMutedState;
+      }
+      this._userMutedState = undefined;
+    }
 
     if (IS_DEV_MODE) {
       if (speedName === SpeedName.SOUNDED) {

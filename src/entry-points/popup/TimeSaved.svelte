@@ -35,6 +35,7 @@
   export let latestTelemetryRecord: RequiredTelemetry | undefined;
   export let settings: RequiredSettings;
   export let onSettingsChange: (newValues: Partial<RequiredSettings>) => void
+  export let onResetTimeSaved: () => void;
 
   let generalTooltipContentEl: HTMLElement;
 
@@ -306,6 +307,17 @@
   }}
 >
   <span>⏱️</span>
+</button>
+<button
+  type="button"
+  on:click={onResetTimeSaved}
+  use:tippy={{
+    ...commonTippyProps,
+    content: () => getMessage('resetTimeSaved') || 'Reset Session',
+  }}
+  style="margin-left: 0.1em; font-size: 0.9em; vertical-align: baseline;"
+>
+  <span>🔄</span>
 </button>
 <!-- TODO this is a little stupid that we have a tooltip for a clock emoji,
 especially accessibility-wise. -->

@@ -344,7 +344,7 @@ export default class AllMediaElementsController {
               './nonSettingsUserActions'
             )).default
           }
-          executeNonSettingsActions(this.activeMediaElement, msg as Parameters<typeof executeNonSettingsActions>[1]);
+          executeNonSettingsActions(this.activeMediaElement, msg as Parameters<typeof executeNonSettingsActions>[1], this.timeSavedTracker);
         };
         break;
       }

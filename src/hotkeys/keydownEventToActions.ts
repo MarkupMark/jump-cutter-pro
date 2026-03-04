@@ -120,6 +120,7 @@ export function keydownEventToActions(
             && HotkeyAction.TOGGLE_MUTE !== binding.action
             && HotkeyAction.INCREASE_VOLUME !== binding.action
             && HotkeyAction.DECREASE_VOLUME !== binding.action
+            && HotkeyAction.RESET_TIME_SAVED !== binding.action
           ) {
             assertNever(binding.action);
           }

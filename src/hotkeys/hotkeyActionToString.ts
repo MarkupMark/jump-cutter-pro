@@ -60,4 +60,5 @@ export const hotkeyActionToString: Record<HotkeyAction, string> = {
   [HotkeyAction.TOGGLE_MUTE]: `🔇 ${getMessage('toggleMute')}`,
   [HotkeyAction.DECREASE_VOLUME]: `🔉 ${getMessage('decreaseVolume')}`,
   [HotkeyAction.INCREASE_VOLUME]: `🔊 ${getMessage('increaseVolume')}`,
+  [HotkeyAction.RESET_TIME_SAVED]: `🔄 ${getMessage('resetTimeSaved') || 'Reset Time Saved'}`,
 };

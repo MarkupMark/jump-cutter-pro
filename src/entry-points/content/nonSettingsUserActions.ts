@@ -6,9 +6,12 @@ import {
 } from "@/hotkeys";
 import { clamp } from "@/helpers";
 
+import type TimeSavedTracker from './TimeSavedTracker';
+
 export default function executeNonSettingsActions(
   el: HTMLMediaElement,
-  nonSettingsActions: Exclude<ReturnType<typeof keydownEventToActions>, undefined>[1]
+  nonSettingsActions: Exclude<ReturnType<typeof keydownEventToActions>, undefined>[1],
+  timeSavedTracker?: TimeSavedTracker
 ) {
   for (const action of nonSettingsActions) {
     switch (action.action) {
@@ -23,6 +26,9 @@ export default function executeNonSettingsActions(
         el.volume = clamp(el.volume + toAdd, 0, 1);
         break;
       }
+      case HotkeyAction.RESET_TIME_SAVED:
+        timeSavedTracker?.reset();
+        break;
       default: assertNever(action.action);
     }
   }

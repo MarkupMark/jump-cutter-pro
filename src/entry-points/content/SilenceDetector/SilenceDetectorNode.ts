@@ -23,6 +23,7 @@ export * from './SilenceDetectorMessage';
 export default class SilenceDetectorNode extends AudioWorkletNode {
   volumeThresholdParam: AudioParam;
   durationThresholdParam: AudioParam;
+  minSoundedDurationParam: AudioParam;
   constructor(context: AudioContext, durationThreshold: number) {
     super(context, 'SilenceDetectorProcessor', {
       parameterData: {
@@ -39,6 +40,8 @@ export default class SilenceDetectorNode extends AudioWorkletNode {
     this.volumeThresholdParam = this.parameters.get('volumeThreshold')!;
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     this.durationThresholdParam = this.parameters.get('durationThreshold')!;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    this.minSoundedDurationParam = this.parameters.get('minSoundedDuration')!;
     // TODO a workaround. Otherwise when you create an instance of `SilenceDetectorNode`, it appears to not have
     // the below `volumeThreshold` & `durationThreshold` setters.
     // Need to report this bug.
@@ -54,5 +57,11 @@ export default class SilenceDetectorNode extends AudioWorkletNode {
   }
   set durationThreshold(v: number) {
     this.durationThresholdParam.value = v;
+  }
+  get minSoundedDuration() {
+    return this.minSoundedDurationParam.value;
+  }
+  set minSoundedDuration(v: number) {
+    this.minSoundedDurationParam.value = v;
   }
 }

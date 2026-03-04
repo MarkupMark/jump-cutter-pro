@@ -61,6 +61,9 @@ export const defaultSettings: Readonly<Settings> = {
   soundedSpeed:         1,
   previousSoundedSpeed: 1,
   enabled: enabledSettingDefaultValue,
+  muteSilences: true,
+  transientNoiseFilterEnabled: true,
+  transientNoiseFilterMinSoundedDurationMs: 30,
   // Seems like new users get immediately scared by the sound distortion the extension causes, so let's let users
   // enable marginBefore manually IF they start noticing that they need it.
   marginBefore:         ElementPlaybackControllerStretchingSpecificDefaults.marginBefore,

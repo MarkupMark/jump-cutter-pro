@@ -203,6 +203,17 @@ export default class TimeSavedTracker {
     });
     this._currentElementSpeed = element.playbackRate;
   }
+
+  public reset(): void {
+    this._timeSavedComparedToSoundedSpeed = 0;
+    this._timeSavedComparedToIntrinsicSpeed = 0;
+    this._wouldHaveLastedIfSpeedWasSounded = 0;
+    this._wouldHaveLastedIfSpeedWasIntrinsic = 0;
+    // Destroy the old stopwatch and create a fresh one to immediately zero out current pending snippet duration.
+    this._playbackStopwatch.destroy();
+    this._playbackStopwatch = new MediaElementPlaybackStopwatch(this.element);
+  }
+
   /**
    * @param variablesUpdatedAgo see the comment above {@link _timeSavedComparedToSoundedSpeed}
    */

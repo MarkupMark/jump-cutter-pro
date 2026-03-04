@@ -20,4 +20,4 @@
 
 import { HotkeyAction } from './HotkeyAction';
 
-export const allNoArgumentActions = [HotkeyAction.TOGGLE_PAUSE, HotkeyAction.TOGGLE_MUTE] as const;
+export const allNoArgumentActions = [HotkeyAction.TOGGLE_PAUSE, HotkeyAction.TOGGLE_MUTE, HotkeyAction.RESET_TIME_SAVED] as const;

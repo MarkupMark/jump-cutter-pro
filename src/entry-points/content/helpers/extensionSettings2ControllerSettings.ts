@@ -32,6 +32,9 @@ export default function extensionSettings2ControllerSettings(extensionSettings: 
     marginBefore: extensionSettings.marginBefore,
     marginAfter: extensionSettings.marginAfter,
     enableDesyncCorrection: extensionSettings.enableDesyncCorrection,
+    muteSilences: extensionSettings.muteSilences,
+    transientNoiseFilterEnabled: extensionSettings.transientNoiseFilterEnabled,
+    transientNoiseFilterMinSoundedDurationMs: extensionSettings.transientNoiseFilterMinSoundedDurationMs,
 
     silenceSpeed: getAbsoluteClampedSilenceSpeed(extensionSettings),
 

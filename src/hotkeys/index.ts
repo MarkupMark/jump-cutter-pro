@@ -38,6 +38,7 @@ export type NonSettingsAction =
   | HotkeyAction.TOGGLE_MUTE
   | HotkeyAction.INCREASE_VOLUME
   | HotkeyAction.DECREASE_VOLUME
+  | HotkeyAction.RESET_TIME_SAVED
 ;
 
 export type NoArgumentAction = typeof allNoArgumentActions[number];
