@@ -20,11 +20,35 @@
 
 import type { Settings } from './';
 import { storage } from './_storage';
+import { getGeckoLikelyMaxNonMutedPlaybackRate } from '@/helpers';
+
+const legacyPopupSilenceSpeedRawMax = BUILD_DEFINITIONS.BROWSER === 'gecko'
+  ? Math.min(8, getGeckoLikelyMaxNonMutedPlaybackRate())
+  : 8;
+const popupSilenceSpeedRawMaxDefault = BUILD_DEFINITIONS.BROWSER === 'gecko'
+  ? Math.min(16, getGeckoLikelyMaxNonMutedPlaybackRate())
+  : 16;
+
+function normalizeSettings<T extends Partial<Settings>>(settings: T): T {
+  if (
+    settings.popupSilenceSpeedRawMax !== legacyPopupSilenceSpeedRawMax
+    || popupSilenceSpeedRawMaxDefault === legacyPopupSilenceSpeedRawMax
+  ) {
+    return settings;
+  }
+
+  // Keep legacy installs on the newer default slider cap without overwriting other custom values.
+  return {
+    ...settings,
+    popupSilenceSpeedRawMax: popupSilenceSpeedRawMaxDefault,
+  } as T;
+}
 
 export async function getSettings<T extends keyof Settings>(keys: T[]): Promise<Pick<Settings, T>>;
 export async function getSettings<T extends keyof Settings>(key: T): Promise<Pick<Settings, T>>;
 export async function getSettings<T extends keyof Settings>(defaults: Pick<Settings, T>): Promise<Pick<Settings, T>>;
 export async function getSettings(...args: Parameters<typeof storage.get>): Promise<Settings>;
 export async function getSettings(...args: Parameters<typeof storage.get>): Promise<Settings> {
-  return storage.get(...args) as Promise<Settings>;
+  const settings = await storage.get(...args) as Partial<Settings>;
+  return normalizeSettings(settings) as Settings;
 }

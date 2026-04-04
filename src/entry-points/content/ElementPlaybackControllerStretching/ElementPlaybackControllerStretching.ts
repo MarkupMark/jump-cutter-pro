@@ -47,6 +47,7 @@ import {
 } from '../playbackRateChangeTracking';
 import { browserHasAudioDesyncBug } from '@/helpers/browserHasAudioDesyncBug';
 import requestIdlePromise from '../helpers/requestIdlePromise';
+import DiagnosticsAudioCapture from '../diagnosticsAudioCapture';
 
 
 // Assuming normal speech speed. Looked here https://en.wikipedia.org/wiki/Sampling_(signal_processing)#Sampling_rate
@@ -55,6 +56,13 @@ const MAX_MARGIN_BEFORE_INTRINSIC_TIME = 0.5;
 // Not just MIN_SOUNDED_SPEED, because in theory sounded speed could be greater than silence speed.
 const MIN_SPEED = 0.25;
 const MAX_MARGIN_BEFORE_REAL_TIME = MAX_MARGIN_BEFORE_INTRINSIC_TIME / MIN_SPEED;
+const VOLUME_FILTER_SMOOTHING_WINDOW_LENGTH = 0.03;
+const MIN_LOOKAHEAD_DELAY_REAL_TIME = VOLUME_FILTER_SMOOTHING_WINDOW_LENGTH + 0.01;
+const OUTPUT_TRANSITION_TO_SILENCE_DURATION = 0.001;
+const OUTPUT_TRANSITION_TO_SOUNDED_DURATION = 0.015;
+const NORMAL_OUTPUT_LOW_PASS_HZ = 20_000;
+const MIN_SILENCE_OUTPUT_LOW_PASS_HZ = 900;
+const SILENCE_OUTPUT_GAIN_FLOOR = 0;
 
 const logging = IS_DEV_MODE && false;
 
@@ -98,16 +106,23 @@ export interface TelemetryRecord {
   elementPlaybackActive: boolean,
   contextTime: AudioContextTime,
   inputVolume: number,
+  chartSpeedName: SpeedName,
+  outputGain: number,
+  outputLowPassHz: number,
   lastActualPlaybackRateChange: ControllerInitialized['_lastActualPlaybackRateChange'],
   elementVolume: number,
   totalOutputDelay: TimeDelta,
   delayFromInputToStretcherOutput: TimeDelta,
   stretcherDelay: TimeDelta,
-  lastScheduledStretchInputTime?: StretchInfo,
+  lastScheduledStretchInputTime?: StretchInfo & { sequenceId: number },
+  lastInterruptedStretchInputTime?: StretchInfo & { sequenceId: number },
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function isStretcherEnabled(settings: ControllerSettings) {
-  return settings.marginBefore > 0;
+  // Always true: we MUST use the stretcher to compensate for the inherent processing delay 
+  // (~30ms) of VolumeFilter and SilenceDetector, otherwise we clip the start of sound.
+  return true;
 }
 
 const getActualPlaybackRateForSpeed = maybeClosestNonNormalSpeed;
@@ -163,6 +178,35 @@ export default class Controller {
   };
   _didNotDoDesyncCorrectionForNSpeedSwitches = 0;
   _mutingGainNode?: GainNode;
+  /** We track gain ourselves because `AudioParam.value` can return stale values
+   * in Chromium when scheduled automations (ramps) are active. */
+  _lastGainValue = 1;
+  _diagnosticsCaptureNode?: MediaStreamAudioDestinationNode;
+  _diagnosticsAudioCapture = new DiagnosticsAudioCapture(
+    () => {
+      if (!this.audioContext || !this._mutingGainNode) {
+        return null;
+      }
+      if (!this._diagnosticsCaptureNode) {
+        this._diagnosticsCaptureNode = this.audioContext.createMediaStreamDestination();
+        this._mutingGainNode.connect(this._diagnosticsCaptureNode);
+      }
+      return this._diagnosticsCaptureNode.stream;
+    },
+    'processed-output',
+    (stream) => {
+      if (this._diagnosticsCaptureNode && this._mutingGainNode) {
+        try {
+          this._mutingGainNode.disconnect(this._diagnosticsCaptureNode);
+        } catch (_error) {
+          // Ignore disconnect races during teardown.
+        }
+      }
+      stream.getTracks().forEach(track => track.stop());
+      this._diagnosticsCaptureNode = undefined;
+    }
+  );
+  _silenceToneFilterNode?: BiquadFilterNode;
   _analyzerOut?: AnalyserNode;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   _log?: (msg?: any) => void;
@@ -177,6 +221,17 @@ export default class Controller {
   ) {
     this.element = videoElement;
     this.settings = controllerSettings;
+  }
+
+  private _getLookaheadDelay() {
+    return Math.max(
+      getOptimalLookaheadDelay(
+        this.settings.marginBefore,
+        this.settings.soundedSpeed,
+        this.settings.silenceSpeed,
+      ),
+      MIN_LOOKAHEAD_DELAY_REAL_TIME,
+    );
   }
 
   isInitialized(): this is ControllerInitialized {
@@ -205,13 +260,12 @@ export default class Controller {
     const addWorkletProcessor = (url: string) =>
       audioContext.audioWorklet.addModule(browserOrChrome.runtime.getURL(url));
 
-    const volumeFilterSmoothingWindowLength = 0.03; // TODO make a setting out of it.
     const volumeFilterProcessorP = addWorkletProcessor('content/VolumeFilterProcessor.js');
     const volumeFilterP = volumeFilterProcessorP.then(() => {
       const volumeFilter = new VolumeFilterNode(
         audioContext,
-        volumeFilterSmoothingWindowLength,
-        volumeFilterSmoothingWindowLength
+        VOLUME_FILTER_SMOOTHING_WINDOW_LENGTH,
+        VOLUME_FILTER_SMOOTHING_WINDOW_LENGTH
       );
       this._destroyedPromise.then(() => destroyAudioWorkletNode(volumeFilter));
       return volumeFilter;
@@ -236,8 +290,8 @@ export default class Controller {
       outVolumeFilterP = volumeFilterProcessorP.then(() => {
         const outVolumeFilter = new VolumeFilterNode(
           audioContext,
-          volumeFilterSmoothingWindowLength,
-          volumeFilterSmoothingWindowLength
+          VOLUME_FILTER_SMOOTHING_WINDOW_LENGTH,
+          VOLUME_FILTER_SMOOTHING_WINDOW_LENGTH
         );
         this._destroyedPromise.then(() => destroyAudioWorkletNode(outVolumeFilter));
         return outVolumeFilter;
@@ -339,12 +393,19 @@ export default class Controller {
     }));
 
     this._mutingGainNode = audioContext.createGain();
-    toDestinationChainLastConnectedLink.connect(this._mutingGainNode);
+    this._silenceToneFilterNode = audioContext.createBiquadFilter();
+    this._silenceToneFilterNode.type = 'lowpass';
+    this._silenceToneFilterNode.frequency.value = NORMAL_OUTPUT_LOW_PASS_HZ;
+    toDestinationChainLastConnectedLink.connect(this._silenceToneFilterNode);
+    this._silenceToneFilterNode.connect(this._mutingGainNode);
     this._mutingGainNode.connect(audioContext.destination);
 
     this._destroyedPromise.then(() => {
       mediaElementSource.disconnect();
       mediaElementSource.connect(audioContext.destination);
+      this._diagnosticsAudioCapture.destroy();
+      this._diagnosticsCaptureNode?.disconnect();
+      this._silenceToneFilterNode!.disconnect();
       this._mutingGainNode!.disconnect();
     });
 
@@ -547,11 +608,7 @@ export default class Controller {
         ? this.settings.transientNoiseFilterMinSoundedDurationMs / 1000
         : 0;
     if (this.isStretcherEnabled()) {
-      this._lookahead.delayTime.value = getOptimalLookaheadDelay(
-        this.settings.marginBefore,
-        this.settings.soundedSpeed,
-        this.settings.silenceSpeed
-      );
+      this._lookahead.delayTime.value = this._getLookaheadDelay();
       this._stretcherAndPitch.onSettingsUpdate();
     }
   }
@@ -585,9 +642,24 @@ export default class Controller {
 
   private _getSilenceDetectorNodeDurationThreshold() {
     const marginBeforeAddition = this.settings.marginBefore;
-    assertDev(this.isStretcherEnabled() ? marginBeforeAddition > 0 : marginBeforeAddition === 0,
-      'Currently the stretcher should only be enabled when marginBefore > 0 and vice versa?');
     return getRealtimeMargin(this.settings.marginAfter + marginBeforeAddition, this.settings.soundedSpeed);
+  }
+
+  private _getSilenceOutputProfile() {
+    // Come richiesto: muting più aggressivo verso zero e comportamento di default 
+    // per contrastare il rumore robotico.
+    let gain = 1;
+    if (this.settings.muteSilences || this.settings.silenceSpeed >= 2.0) {
+      gain = SILENCE_OUTPUT_GAIN_FLOOR;
+    } else if (this.settings.silenceSpeed > 1.0) {
+      // Degrada il volume man mano che la velocità sale prima dei 2.0x
+      gain = Math.max(SILENCE_OUTPUT_GAIN_FLOOR, 1 - (this.settings.silenceSpeed - 1.0));
+    }
+
+    return {
+      gain,
+      lowPassHz: MIN_SILENCE_OUTPUT_LOW_PASS_HZ,
+    };
   }
 
   /**
@@ -611,13 +683,38 @@ export default class Controller {
       (this.element as any).mozPreservesPitch = speedName === SpeedName.SOUNDED;
     }
 
+    const outputProfile = speedName === SpeedName.SILENCE
+      ? this._getSilenceOutputProfile()
+      : { gain: 1, lowPassHz: NORMAL_OUTPUT_LOW_PASS_HZ };
+    const transitionDuration = speedName === SpeedName.SILENCE
+      ? OUTPUT_TRANSITION_TO_SILENCE_DURATION
+      : OUTPUT_TRANSITION_TO_SOUNDED_DURATION;
+
+    const lookaheadDelay = this._lookahead?.delayTime.value ?? 0;
+    const stretcherDelay = this._stretcherAndPitch?.stretcherDelay ?? 0;
+    const pitchCorrectorDelay = this._stretcherAndPitch?.pitchCorrectorDelay ?? 0;
+    const totalOutputDelay = getTotalOutputDelay(lookaheadDelay, stretcherDelay, pitchCorrectorDelay);
+    const effectsSchedulingTime = elementSpeedSwitchedAt + totalOutputDelay;
+
     if (this._mutingGainNode) {
-      const targetGain = (speedName === SpeedName.SILENCE && this.settings.muteSilences) ? 0 : 1;
-      // We still update the value but avoid ramping explicitly for performance if it's already at target
-      // Actually audio nodes are efficient, but cancelScheduledValues is cheap anyway
-      this._mutingGainNode.gain.cancelScheduledValues(elementSpeedSwitchedAt);
-      this._mutingGainNode.gain.setValueAtTime(this._mutingGainNode.gain.value, elementSpeedSwitchedAt);
-      this._mutingGainNode.gain.linearRampToValueAtTime(targetGain, elementSpeedSwitchedAt + 0.01);
+      const targetGain = outputProfile.gain;
+      this._mutingGainNode.gain.cancelScheduledValues(effectsSchedulingTime);
+      // Use our tracked value instead of AudioParam.value, which is unreliable in
+      // Chromium when there are pending scheduled automation events.
+      this._mutingGainNode.gain.setValueAtTime(this._lastGainValue, effectsSchedulingTime);
+      this._mutingGainNode.gain.linearRampToValueAtTime(targetGain, effectsSchedulingTime + transitionDuration);
+      this._lastGainValue = targetGain;
+    }
+    if (this._silenceToneFilterNode) {
+      this._silenceToneFilterNode.frequency.cancelScheduledValues(effectsSchedulingTime);
+      this._silenceToneFilterNode.frequency.setValueAtTime(
+        this._silenceToneFilterNode.frequency.value,
+        effectsSchedulingTime
+      );
+      this._silenceToneFilterNode.frequency.linearRampToValueAtTime(
+        outputProfile.lowPassHz,
+        effectsSchedulingTime + transitionDuration
+      );
     }
 
     if (IS_DEV_MODE) {
@@ -654,7 +751,7 @@ export default class Controller {
      * Because of lookahead and stretcher delays, stretches are delayed (duh). This function maps stretch time to where
      * it would be on the input timeline.
      */
-    const stretchToInputTime = (stretch: StretchInfo): StretchInfo => ({
+    const stretchToInputTime = <T extends StretchInfo>(stretch: T): T => ({
       ...stretch,
       startTime: stretch.startTime - getDelayFromInputToStretcherOutput(lookaheadDelay, stretch.startValue),
       endTime: stretch.endTime - getDelayFromInputToStretcherOutput(lookaheadDelay, stretch.endValue),
@@ -668,6 +765,9 @@ export default class Controller {
       elementPlaybackActive: isPlaybackActive(this.element),
       contextTime: this.audioContext.currentTime,
       inputVolume,
+      chartSpeedName: this._lastActualPlaybackRateChange.name,
+      outputGain: this._mutingGainNode?.gain.value ?? 1,
+      outputLowPassHz: this._silenceToneFilterNode?.frequency.value ?? NORMAL_OUTPUT_LOW_PASS_HZ,
       lastActualPlaybackRateChange: this._lastActualPlaybackRateChange,
       elementVolume: this.element.volume,
       totalOutputDelay: getTotalOutputDelay(
@@ -677,11 +777,20 @@ export default class Controller {
       ),
       delayFromInputToStretcherOutput: getDelayFromInputToStretcherOutput(lookaheadDelay, stretcherDelay),
       stretcherDelay,
-      // TODO also log `interruptLastScheduledStretch` calls.
-      // lastScheduledStretch: this._stretcherAndPitch.lastScheduledStretch,
       lastScheduledStretchInputTime:
         this._stretcherAndPitch?.lastScheduledStretch
         && stretchToInputTime(this._stretcherAndPitch.lastScheduledStretch),
+      lastInterruptedStretchInputTime:
+        this._stretcherAndPitch?.lastInterruptedStretch
+        && stretchToInputTime(this._stretcherAndPitch.lastInterruptedStretch),
     };
+  }
+
+  startDiagnosticsAudioCapture() {
+    return this._diagnosticsAudioCapture.start();
+  }
+
+  stopDiagnosticsAudioCapture() {
+    return this._diagnosticsAudioCapture.stop();
   }
 }

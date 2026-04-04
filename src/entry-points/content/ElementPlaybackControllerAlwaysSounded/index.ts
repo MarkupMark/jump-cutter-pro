@@ -33,6 +33,7 @@ import {
   setPlaybackRateAndRememberIt,
   setDefaultPlaybackRateAndRememberIt,
 } from '../playbackRateChangeTracking';
+import DiagnosticsAudioCapture, { getMediaElementCaptureStream } from '../diagnosticsAudioCapture';
 
 type Time = AnyTime;
 
@@ -49,6 +50,7 @@ export interface TelemetryRecord {
   elementPlaybackActive: boolean,
   contextTime: Time,
   inputVolume: number,
+  chartSpeedName: SpeedName.SOUNDED,
   lastActualPlaybackRateChange: {
     time: Time,
     value: number,
@@ -58,6 +60,7 @@ export interface TelemetryRecord {
   elementVolume: number,
   totalOutputDelay: 0,
   lastScheduledStretchInputTime?: never,
+  lastInterruptedStretchInputTime?: never,
   stretcherDelay: 0,
 }
 
@@ -87,6 +90,10 @@ export default class Controller {
     time: 0,
     value: 1,
   };
+  private _diagnosticsAudioCapture = new DiagnosticsAudioCapture(
+    () => getMediaElementCaptureStream(this.element),
+    'element-capture',
+  );
 
   constructor(
     videoElement: HTMLMediaElement,
@@ -110,6 +117,7 @@ export default class Controller {
     this._destroyedPromise.then(() => {
       setPlaybackRateAndRememberIt(element, elementPlaybackRateBeforeInitialization);
       setDefaultPlaybackRateAndRememberIt(element, elementDefaultPlaybackRateBeforeInitialization);
+      this._diagnosticsAudioCapture.destroy();
     });
 
     this._setStateAccordingToNewSettings(this.settings);
@@ -191,11 +199,20 @@ export default class Controller {
       elementPlaybackActive: isPlaybackActive(this.element),
       contextTime: audioContext.currentTime,
       inputVolume: 0,
+      chartSpeedName: SpeedName.SOUNDED,
       lastActualPlaybackRateChange: this._lastActualPlaybackRateChange,
       elementVolume: this.element.volume,
       totalOutputDelay: 0,
       delayFromInputToStretcherOutput: 0,
       stretcherDelay: 0,
     };
+  }
+
+  startDiagnosticsAudioCapture() {
+    return this._diagnosticsAudioCapture.start();
+  }
+
+  stopDiagnosticsAudioCapture() {
+    return this._diagnosticsAudioCapture.stop();
   }
 }

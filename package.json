@@ -23,7 +23,10 @@
     "_abstract-serve": "webpack --mode=development --watch",
     "serve:gecko": "npm run _abstract-serve -- --env browser=gecko",
     "serve:chromium": "npm run _abstract-serve -- --env browser=chromium",
-    "lint": "eslint ./src/"
+    "lint": "eslint ./src/",
+    "diagnostics:chromium": "npm run build:chromium && node tools/diagnostics/run-chromium-diagnostics.mjs",
+    "diagnostics:local-file": "npm run build:chromium && node tools/diagnostics/run-local-file-diagnostics.mjs",
+    "diagnostics:webaudio-demo": "node tools/diagnostics/webaudio-bypass-demo.mjs"
   },
   "sideEffects": [
     "./src/{content,popup,background,options,local-file-player}/main.ts",
@@ -50,6 +53,7 @@
     "css-loader": "^7.1.1",
     "eslint": "^8.44.0",
     "minimize-webext-i18n-json": "^2.0.2",
+    "puppeteer-core": "^24.38.0",
     "style-loader": "^4.0.0",
     "svelte": "~4.2.17",
     "svelte-check": "^3.7.1",

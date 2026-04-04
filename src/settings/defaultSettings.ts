@@ -193,7 +193,7 @@ export const defaultSettings: Readonly<Settings> = {
   popupAutofocusEnabledInput: false,
   popupChartWidthPx: 400,
   popupChartHeightPx: 50,
-  popupChartLengthInSeconds: 8,
+  popupChartLengthInSeconds: 60,
   // TODO maybe even if `popupChartSpeed === 'intrinsicTime'` the period still should be in real time?
   // At least as an option? But we're now expressing it as a fraction of chart length.
   popupChartJumpPeriod: 0,
@@ -216,9 +216,9 @@ export const defaultSettings: Readonly<Settings> = {
   // See the comment in `getAbsoluteClampedSilenceSpeed` definition on why `max` is different
   // for different browsers.
   popupSilenceSpeedRawMax: BUILD_DEFINITIONS.BROWSER === 'gecko'
-    // But if the browser gets upgraded, this will remain at 4. Doesn't matter?
-    ? Math.min(8, getGeckoLikelyMaxNonMutedPlaybackRate())
-    : 8,
+    // But if the browser gets upgraded, this will remain at the previously detected limit. Doesn't matter?
+    ? Math.min(16, getGeckoLikelyMaxNonMutedPlaybackRate())
+    : 16,
   popupSilenceSpeedRawStep: 0.05,
 
   popupMarginBeforeMin: 0,

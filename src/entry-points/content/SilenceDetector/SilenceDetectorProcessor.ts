@@ -36,6 +36,8 @@ class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
   _lastEmitedEventIsSilenceStartEvent: boolean;
   /** How many consecutive loud samples we have seen since the last quiet sample. */
   _consecutiveLoudSamples: number;
+  /** Grace period after SILENCE_END to avoid bouncing back to silence inside speech onset. */
+  _silenceStartSuppressedUntilSampleInd: number;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   constructor(options: any) {
     super(options);
@@ -48,6 +50,7 @@ class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
     this._lastLoudSampleInd = currSampleInd - initialDuration * sampleRate;
     this._lastEmitedEventIsSilenceStartEvent = false;
     this._consecutiveLoudSamples = 0;
+    this._silenceStartSuppressedUntilSampleInd = currSampleInd;
   }
   static get parameterDescriptors() {
     return [
@@ -125,6 +128,7 @@ class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
           ];
           this.port.postMessage(m);
           this._lastEmitedEventIsSilenceStartEvent = false;
+          this._silenceStartSuppressedUntilSampleInd = sampleIGlobal + minSoundedDurationSamples;
         }
 
         // However, only update _lastLoudSampleInd once loud audio has been sustained for
@@ -143,6 +147,7 @@ class SilenceDetectorProcessor extends WorkaroundAudioWorkletProcessor {
         this._consecutiveLoudSamples = 0;
         if (
           !this._lastEmitedEventIsSilenceStartEvent
+          && sampleIGlobal >= this._silenceStartSuppressedUntilSampleInd
           && this.isPastDurationThreshold(sampleIGlobal, durationThresholdSamples)
         ) {
           const m: SilenceDetectorMessage = [

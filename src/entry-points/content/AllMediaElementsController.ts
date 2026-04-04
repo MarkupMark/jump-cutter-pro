@@ -35,6 +35,7 @@ import extensionSettings2ControllerSettings from './helpers/extensionSettings2Co
 import broadcastStatus from './broadcastStatus';
 import once from 'lodash/once';
 import debounce from 'lodash/debounce';
+import PlaybackSpeedOverlay from './PlaybackSpeedOverlay';
 import {
   mediaElementSourcesMap
 } from '@/entry-points/content/getOrCreateMediaElementSourceAndUpdateMap';
@@ -64,6 +65,15 @@ export type TelemetryMessage =
      */
     elementRemainingIntrinsicDuration: number,
   };
+
+type DiagnosticsAudioActionMessage =
+  | { type: 'startAudioCapture' }
+  | { type: 'stopAudioCapture' };
+
+type DiagnosticsCapableController = SomeController & {
+  startDiagnosticsAudioCapture?: () => Promise<unknown>,
+  stopDiagnosticsAudioCapture?: () => Promise<unknown>,
+};
 
 let allMediaElementsControllerActive = false;
 
@@ -166,6 +176,9 @@ export default class AllMediaElementsController {
   // it will be called in `destroy`.
   private _destroyedPromise = new Promise<void>(r => this._resolveDestroyedPromise = r);
   private _onDetachFromActiveElement?: () => void;
+  private playbackSpeedOverlay = new PlaybackSpeedOverlay(
+    (newSoundedSpeed) => this.applySettingsChange({ soundedSpeed: newSoundedSpeed })
+  );
 
   constructor() {
     if (IS_DEV_MODE) {
@@ -185,6 +198,7 @@ export default class AllMediaElementsController {
     }
     const removeListener = addOnStorageChangedListener(reactToStorageChanges);
     this._destroyedPromise.then(removeListener);
+    this._destroyedPromise.then(() => this.playbackSpeedOverlay.destroy());
   }
   private destroy() {
     this.detachFromActiveElement();
@@ -211,8 +225,24 @@ export default class AllMediaElementsController {
 
   private async _loadSettings() {
     this.settings = await getSettings();
+    this.updatePlaybackSpeedOverlay();
   }
   private ensureLoadSettings = once(this._loadSettings);
+  private applySettingsChange(newValues: Partial<Settings>) {
+    this.reactToSettingsNewValues(newValues);
+    setSettings(newValues);
+  }
+  private updatePlaybackSpeedOverlay() {
+    if (!this.settings) {
+      return;
+    }
+    this.playbackSpeedOverlay.updateSettings({
+      soundedSpeed: this.settings.soundedSpeed,
+      popupSoundedSpeedMin: this.settings.popupSoundedSpeedMin,
+      popupSoundedSpeedMax: this.settings.popupSoundedSpeedMax,
+    });
+    this.playbackSpeedOverlay.setActiveElement(this.activeMediaElement);
+  }
   private reactToSettingsNewValues(newValues: Partial<Settings>) {
     if (newValues.enabled === false) {
       this.destroy();
@@ -233,6 +263,7 @@ export default class AllMediaElementsController {
       return;
     }
     Object.assign(this.settings, newValues);
+    this.updatePlaybackSpeedOverlay();
     assertDev(this.controller);
 
     if (controllerTypeDependsOnSettings.some(key => key in newValues)) {
@@ -348,6 +379,37 @@ export default class AllMediaElementsController {
         };
         break;
       }
+      case 'diagnostics': {
+        listener = async (msg: unknown) => {
+          const controller = this.controller as DiagnosticsCapableController | undefined;
+          const action = msg as DiagnosticsAudioActionMessage;
+          if (action?.type === 'startAudioCapture') {
+            if (!controller?.initialized) {
+              port.postMessage({ type: 'startAudioCaptureResult', result: {
+                started: false,
+                reason: 'controller-not-ready',
+              } });
+              return;
+            }
+            const result = controller.startDiagnosticsAudioCapture
+              ? await controller.startDiagnosticsAudioCapture()
+              : { started: false, reason: 'unsupported-controller' };
+            port.postMessage({ type: 'startAudioCaptureResult', result });
+            return;
+          }
+          if (action?.type === 'stopAudioCapture') {
+            if (!controller?.initialized) {
+              port.postMessage({ type: 'stopAudioCaptureResult', result: null });
+              return;
+            }
+            const result = controller.stopDiagnosticsAudioCapture
+              ? await controller.stopDiagnosticsAudioCapture()
+              : null;
+            port.postMessage({ type: 'stopAudioCaptureResult', result });
+          }
+        };
+        break;
+      }
       default: {
         // port.disconnect()
         if (IS_DEV_MODE) {
@@ -382,8 +444,7 @@ export default class AllMediaElementsController {
         // `keydownEventToActions` depends on it), but do not take any action until the onChanged event fires?
         // Better yet, rewrite settings changes with messages API already so the script that made the change doesn't
         // have to react to its own settings changes because it doesn't receive its own settings update message.
-        this.reactToSettingsNewValues(newSettings);
-        setSettings(newSettings);
+        this.applySettingsChange(newSettings);
       },
       getActiveMediaElement: () => this.activeMediaElement,
       onStop: (callback) => this._destroyedPromise.then(callback),
@@ -408,12 +469,14 @@ export default class AllMediaElementsController {
       // Need to do this even if it's already the active element, for the case when there are multiple iframe-embedded
       // media elements on the page.
       this.elementLastActivatedAt = calledAt;
+      this.playbackSpeedOverlay.setActiveElement(el);
       return;
     }
     if (this.activeMediaElement) {
       this.detachFromActiveElement();
     }
     this.activeMediaElement = el;
+    this.playbackSpeedOverlay.setActiveElement(el);
 
     assertDev(this._onDetachFromActiveElement === undefined, 'I think `_onDetachFromActiveElement` '
       + `should be \`undefined\` here. Instead it is ${this._onDetachFromActiveElement}`);
@@ -433,6 +496,7 @@ export default class AllMediaElementsController {
     // Currently this is technically not required since `this.activeMediaElement` is immediately reassigned
     // in the line above after the `detachFromActiveElement` call.
     onDetach(() => this.activeMediaElement = undefined);
+    onDetach(() => this.playbackSpeedOverlay.setActiveElement(undefined));
 
     await this.ensureLoadSettings();
     assertDev(this.settings)
@@ -632,8 +696,7 @@ export default class AllMediaElementsController {
               // just be doing `el.playbackRate += increment`;
 
               const settingsNewValues = { soundedSpeed: el_.playbackRate };
-              this.reactToSettingsNewValues(settingsNewValues);
-              setSettings(settingsNewValues);
+              this.applySettingsChange(settingsNewValues);
               if (IS_DEV_MODE) {
                 console.warn('Updating soundedSpeed because apparently playbackRate was changed by'
                   + ' something other that this extension.');

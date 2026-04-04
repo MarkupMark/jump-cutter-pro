@@ -1,0 +1,119 @@
+{
+  "createdAt": "2026-03-09T17:06:46.283Z",
+  "samplePath": "/Users/marco/Documents/trasfer AG Projects/jumpcutter/sample_audio.mp3",
+  "durationMs": 10135.51,
+  "silenceRanges": [
+    {
+      "startMs": 0,
+      "endMs": 103.651
+    },
+    {
+      "startMs": 978.821,
+      "endMs": 1081.451
+    },
+    {
+      "startMs": 1131.859,
+      "endMs": 2726.4629999999997
+    },
+    {
+      "startMs": 4263.243,
+      "endMs": 4479.388
+    },
+    {
+      "startMs": 5145.306,
+      "endMs": 5280.408
+    },
+    {
+      "startMs": 5797.2789999999995,
+      "endMs": 5911.429
+    },
+    {
+      "startMs": 6110.974999999999,
+      "endMs": 6253.9
+    },
+    {
+      "startMs": 6384.717000000001,
+      "endMs": 6519.932
+    },
+    {
+      "startMs": 7044.331,
+      "endMs": 7182.54
+    },
+    {
+      "startMs": 8287.256,
+      "endMs": 8827.732
+    },
+    {
+      "startMs": 9671.293,
+      "endMs": 9768.594000000001
+    }
+  ],
+  "runs": [
+    {
+      "controller": "stretching",
+      "passed": true,
+      "issues": [],
+      "metrics": {
+        "playbackEnded": true,
+        "wallElapsedMs": 9904.6,
+        "mediaDurationMs": 10135.51,
+        "wallToMediaRatio": 0.977,
+        "seekingEvents": 0,
+        "telemetrySamples": 81,
+        "telemetry": {
+          "silenceShareOnSound": 0,
+          "silenceShareOnSilence": 0.36363636363636365,
+          "totalSamples": 81
+        },
+        "chart": {
+          "redShareOnSound": 0.006903395436274384,
+          "redShareOnSilence": 0.5315443162406545,
+          "visibleStartMs": -49884.530000000006,
+          "visibleEndMs": 10115.47
+        },
+        "popupConnected": true,
+        "latestTelemetryRecord": {
+          "intrinsicTime": 10.13551,
+          "inputVolume": 0.00005681815309799276,
+          "chartSpeedName": 0,
+          "controllerType": 1,
+          "elementRemainingIntrinsicDuration": 0
+        }
+      },
+      "screenshotPath": "/Users/marco/Documents/trasfer AG Projects/jumpcutter/diagnostics-output/sample-audio-stretching-popup.png"
+    },
+    {
+      "controller": "cloning",
+      "passed": true,
+      "issues": [],
+      "metrics": {
+        "playbackEnded": true,
+        "wallElapsedMs": 9350.2,
+        "mediaDurationMs": 10135.51,
+        "wallToMediaRatio": 0.923,
+        "seekingEvents": 0,
+        "telemetrySamples": 80,
+        "telemetry": {
+          "silenceShareOnSound": 0,
+          "silenceShareOnSilence": 0.45,
+          "totalSamples": 80
+        },
+        "chart": {
+          "redShareOnSound": 0.002901371613680663,
+          "redShareOnSilence": 0.530033357346446,
+          "visibleStartMs": -49884.530000000006,
+          "visibleEndMs": 10115.47
+        },
+        "popupConnected": true,
+        "latestTelemetryRecord": {
+          "intrinsicTime": 10.13551,
+          "inputVolume": 0.000053840605687582865,
+          "chartSpeedName": 0,
+          "controllerType": 1,
+          "elementRemainingIntrinsicDuration": 0
+        }
+      },
+      "screenshotPath": "/Users/marco/Documents/trasfer AG Projects/jumpcutter/diagnostics-output/sample-audio-cloning-popup.png"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   import { onDestroy } from 'svelte';
   import {
     addOnStorageChangedListener, getSettings, setSettings, Settings, settingsChanges2NewValues,
-    ControllerKind_CLONING, ControllerKind_STRETCHING, changeAlgorithmAndMaybeRelatedSettings,
+    ControllerKind_CLONING, ControllerKind_STRETCHING,
     PopupAdjustableRangeInputsCapitalized,
     ControllerKind_ALWAYS_SOUNDED,
     OppositeDayMode_ON,
@@ -104,15 +104,25 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       | 'lifetimeTimeSavedComparedToIntrinsicSpeed'
       | 'lifetimeWouldHaveLastedIfSpeedWasSounded'
       | 'lifetimeWouldHaveLastedIfSpeedWasIntrinsic'
+      | 'experimentalControllerType'
+      | 'useSeparateMarginSettingsForDifferentAlgorithms'
+      | 'algorithmSpecificSettings'
     >
     & ReturnType<Parameters<typeof createKeydownListener>[1]>
-    & Parameters<typeof changeAlgorithmAndMaybeRelatedSettings>[0]
     & Parameters<typeof rangeInputSettingNameToAttrs>[1];
   let settings: RequiredSettings;
+  const urlParams = new URLSearchParams(window.location.search);
+  const diagnosticsEnabled = urlParams.has('diagnostics');
+  const detachedTabId = urlParams.has('tabId')
+    ? parseInt(urlParams.get('tabId')!, 10)
+    : undefined;
+  const popupIsDetached = Number.isFinite(detachedTabId);
+  let chartWidthPx = 400;
 
   let settingsPromise = getSettings();
   settingsPromise.then(s => {
     settings = s;
+    updateChartWidth();
   })
   function assignNewSettings(newValues: Partial<RequiredSettings>) {
     for (const [k_, v] of Object.entries(newValues)) {
@@ -121,7 +131,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     }
   }
   async function getTab() {
-    const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('tabId')) {
       try {
         const tabId = parseInt(urlParams.get('tabId')!, 10);
@@ -178,6 +187,22 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     postMessage: (actions: Array<HotkeyBinding<NonSettingsAction>>) => void;
   } | undefined;
 
+  function updateChartWidth() {
+    if (!settings) {
+      return;
+    }
+    if (!popupIsDetached) {
+      chartWidthPx = settings.popupChartWidthPx;
+      return;
+    }
+
+    const bodyStyles = getComputedStyle(document.body);
+    const horizontalPadding =
+      parseFloat(bodyStyles.paddingLeft || '0')
+      + parseFloat(bodyStyles.paddingRight || '0');
+    chartWidthPx = Math.max(240, Math.floor(window.innerWidth - horizontalPadding));
+  }
+
   let resolveFirstTelemetryReceivedP: () => void;
   const firstTelemetryReceivedP = new Promise<void>(r => resolveFirstTelemetryReceivedP = r);
   let latestTelemetryRecord: TelemetryMessage | undefined;
@@ -186,6 +211,43 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   // Well, actaully we don't currently require this, because this component gets destroyed only when the document gets
   // destroyed.
   onDestroy(() => disconnect?.());
+  onDestroy(() => window.removeEventListener('resize', updateChartWidth));
+  type DiagnosticsWindow = Window & {
+    __jumpCutterChartDiagnostics?: { getState: () => unknown },
+    __jumpCutterPopupDiagnostics?: { getState: () => unknown },
+  };
+  function getPopupDiagnosticsState() {
+    return {
+      connected: !!disconnect,
+      popupIsDetached,
+      detachedTabId,
+      chartWidthPx,
+      telemetryPresent: !!latestTelemetryRecord,
+      latestTelemetryRecord: latestTelemetryRecord
+        ? JSON.parse(JSON.stringify(latestTelemetryRecord))
+        : undefined,
+      chart: (window as DiagnosticsWindow).__jumpCutterChartDiagnostics?.getState?.() ?? undefined,
+    };
+  }
+  if (diagnosticsEnabled) {
+    (window as DiagnosticsWindow).__jumpCutterPopupDiagnostics = {
+      getState: getPopupDiagnosticsState,
+    };
+    onDestroy(() => {
+      delete (window as DiagnosticsWindow).__jumpCutterPopupDiagnostics;
+    });
+  }
+  if (popupIsDetached) {
+    window.addEventListener('resize', updateChartWidth);
+
+    const onTabRemoved = (tabId: number) => {
+      if (tabId === detachedTabId) {
+        window.close();
+      }
+    };
+    browserOrChrome.tabs.onRemoved.addListener(onTabRemoved);
+    onDestroy(() => browserOrChrome.tabs.onRemoved.removeListener(onTabRemoved));
+  }
   $: connected = !!disconnect;
   let considerConnectionFailed = false;
   let gotAtLeastOneContentStatusResponse = false;
@@ -289,6 +351,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       unhandledStorageChanges = { ...unhandledStorageChanges, ...newValues };
     } else {
       assignNewSettings(newValues);
+      updateChartWidth();
     }
   });
 
@@ -321,6 +384,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   }, 50);
   function updateSettingsLocalCopyAndStorage(newValues: Partial<typeof settings>) {
     assignNewSettings(newValues);
+    updateChartWidth();
     Object.keys(newValues).forEach(key => settingsKeysToSaveToStorage.add(key as keyof typeof newValues));
     throttledSaveUnsavedSettingsToStorageAndTriggerCallbacks();
   }
@@ -377,17 +441,8 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       window.close();
     };
 
-  function onUseExperimentalAlgorithmInput(e: Event) {
-    const newControllerType = (e.target as HTMLInputElement).checked
-      ? ControllerKind_CLONING
-      : ControllerKind_STRETCHING
-    const newValues = changeAlgorithmAndMaybeRelatedSettings(settings, newControllerType);
-    updateSettingsLocalCopyAndStorage(newValues);
-  }
-
   $: controllerTypeAlwaysSounded = latestTelemetryRecord?.controllerType === ControllerKind_ALWAYS_SOUNDED;
-
-  const displayNewBadgeOnExperimentalAlgorithm = new Date() < new Date('2024-09-30');
+  $: legacyCloningEnabled = settings?.experimentalControllerType === ControllerKind_CLONING;
 
   function onAdvancedModeChange(isOn: boolean) {
     settingsKeysToSaveToStorage.add('advancedMode');
@@ -681,7 +736,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   <!-- TODO transitions? -->
   <div
     style={
-      `--popupChartWidth: ${settings.popupChartWidthPx}px;`
+      `--popupChartWidth: ${chartWidthPx}px;`
       + `--popupChartHeight: ${settings.popupChartHeightPx}px;`
       +'min-width: var(--popupChartWidth);'
       + 'min-height: var(--popupChartHeight);'
@@ -796,7 +851,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
         {latestTelemetryRecord}
         volumeThreshold={settings.volumeThreshold}
         loadedPromise={settingsPromise}
-        widthPx={settings.popupChartWidthPx}
+        widthPx={chartWidthPx}
         heightPx={settings.popupChartHeightPx}
         lengthSeconds={settings.popupChartLengthInSeconds}
         jumpPeriod={settings.popupChartJumpPeriod}
@@ -822,6 +877,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
         <MediaUnsupportedMessage
           {latestTelemetryRecord}
           {settings}
+          widthPx={chartWidthPx}
           on:dontAttachToCrossOriginMediaChange={({ detail }) => {
             updateSettingsLocalCopyAndStorage({ dontAttachToCrossOriginMedia: detail });
           }}
@@ -853,29 +909,9 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     />
   </label>
   {:else}
-  <label
-    use:tippy={{
-      content: () => getMessage('useExperimentalAlgorithmTooltip'),
-      theme: tippyThemeMyTippyAndPreLine,
-    }}
-    style="margin-top: 1rem; display: inline-flex; align-items: center;"
-  >
-    <input
-      checked={settings.experimentalControllerType === ControllerKind_CLONING}
-      on:input={onUseExperimentalAlgorithmInput}
-      disabled={controllerTypeAlwaysSounded}
-      type="checkbox"
-      style="margin: 0 0.5rem 0 0;"
-    >
-    <span>🧪</span>
-    {#if displayNewBadgeOnExperimentalAlgorithm}
-      <span>🆕</span>
-    {/if}
-    <span>&nbsp;{getMessage('useExperimentalAlgorithm')}</span>
-  </label>
   {#if (
     // The opposite day mode only applies to the cloning controller.
-    settings.experimentalControllerType === ControllerKind_CLONING
+    legacyCloningEnabled
     && (
       settings.oppositeDayMode === OppositeDayMode_UNDISCOVERED
         ? oppositeDayModeIsDiscoverable
@@ -941,7 +977,9 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   {/if}
   <!-- TODO DRY `VolumeThreshold`? Like `'V' + 'olumeThreshold'`? Same for other inputs. -->
   <RangeSlider
-    label="🔉 {getMessage('volumeThreshold')}"
+    label="🔉 {getMessage('volumeThreshold')} (x1000)"
+    fractionalDigits={1}
+    valueScale={1000}
     {...rangeInputSettingNameToAttrs('VolumeThreshold', settings)}
     bind:value={settings.volumeThreshold}
     on:input={createOnInputListener('volumeThreshold')}
@@ -1001,10 +1039,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     {...rangeInputSettingNameToAttrs('SilenceSpeedRaw', settings)}
     bind:value={settings.silenceSpeedRaw}
     on:input={createOnInputListener('silenceSpeedRaw')}
-    disabled={
-      settings.experimentalControllerType === ControllerKind_CLONING
-      || controllerTypeAlwaysSounded
-    }
+    disabled={controllerTypeAlwaysSounded}
     useForInputParams={{
       content: () => {
         let tooltip = getMessage(
@@ -1031,18 +1066,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   />
   <label
     style="margin-top: 1rem; display: inline-flex; align-items: center;"
-  >
-    <input
-      type="checkbox"
-      bind:checked={settings.muteSilences}
-      on:change={createOnInputListener('muteSilences')}
-      disabled={controllerTypeAlwaysSounded}
-      style="margin: 0 0.5rem 0 0;"
-    >
-    <span>🔇 {getMessage('muteSilences')}</span>
-  </label>
-  <label
-    style="margin-top: 0.5rem; display: inline-flex; align-items: center;"
     use:tippy={{
       content: () => getMessage('transientNoiseFilterEnabledTooltip') || 'Filter transient noises',
       theme: 'my-tippy',

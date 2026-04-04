@@ -30,6 +30,7 @@ export let settings: Pick<Settings,
   | 'popupChartWidthPx'
   | 'dontAttachToCrossOriginMedia'
 >;
+export let widthPx: number | undefined;
 export let latestTelemetryRecord: Pick<TelemetryMessage,
   'createMediaElementSourceCalledForElement'
   | 'elementCurrentSrc'
@@ -46,7 +47,7 @@ function onDontAttachToCrossOriginMediaChange(e: Event) {
     'margin: 1rem 0 0.25rem 0;'
     + 'text-align: center;'
     + 'text-align: center;'
-    + `width: ${settings.popupChartWidthPx}px`
+    + `width: ${widthPx ?? settings.popupChartWidthPx}px`
   }
 >
   ⚠️

@@ -47,7 +47,9 @@
     "toggle_enabled": {
       "description": "__MSG_toggleExtension__",
       "suggested_key": {
-        "default": "Alt+Shift+X"
+        "default": "Alt+Shift+X",
+        "windows": "Ctrl+E",
+        "mac": "Command+E"
       }
     }
   },

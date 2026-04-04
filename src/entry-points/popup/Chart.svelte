@@ -21,7 +21,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   immutable={true}
 />
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { SmoothieChart, TimeSeries } from '@wofwca/smoothie';
   import { assertDev, /* SpeedName, */ SpeedName_SILENCE, SpeedName_SOUNDED } from '@/helpers';
   import type {
@@ -44,6 +44,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     | ElementPlaybackControllerCloningTelemetryRecord
     | ElementPlaybackControllerAlwaysSoundedTelemetryRecord
   ;
+  type StretchTelemetry = StretchInfo & { sequenceId: number };
   export let latestTelemetryRecord: TelemetryRecord | undefined;
   export let volumeThreshold: number;
   export let loadedPromise: Promise<any>;
@@ -54,6 +55,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   export let timeProgressionSpeed: Settings['popupChartSpeed']; // Non-reactive
   export let soundedSpeed: number;
   export let telemetryUpdatePeriod: TimeDelta;
+  const diagnosticsEnabled = new URLSearchParams(window.location.search).has('diagnostics');
 
   const timelineIsMediaIntrinsic =
     timeProgressionSpeed === 'intrinsicTime'
@@ -117,6 +119,21 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
 
   let stretchSeries: TimeSeries;
   let shrinkSeries: TimeSeries;
+  type CanvasColor = 'red' | 'green' | 'other';
+  type PixelColorRun = {
+    startX: number,
+    endX: number,
+    color: CanvasColor,
+  };
+  let lastRenderDiagnostics:
+    | {
+      chartEdgeTimeMs: TimeMs,
+      currentTimeMs: TimeMs,
+      millisPerPixel: number,
+      jumpOffsetMs: number,
+      topColorRuns: PixelColorRun[],
+    }
+    | undefined;
 
   const bestYAxisRelativeVolumeThreshold = 1/6;
   let chartMaxValue: number;
@@ -427,6 +444,56 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     updateSmoothieVolumeThreshold();
 
     const canvasContext = canvasEl.getContext('2d')!;
+    function classifyCanvasPixelColor(r: number, g: number, b: number, a: number): CanvasColor {
+      if (a === 0) {
+        return 'other';
+      }
+      if (r > g + 20 && r > b + 20) {
+        return 'red';
+      }
+      if (g > r + 20 && g > b + 20) {
+        return 'green';
+      }
+      return 'other';
+    }
+    function getTopColorRuns(): PixelColorRun[] {
+      if (!diagnosticsEnabled || widthPx <= 0 || heightPx <= 0) {
+        return [];
+      }
+      const sampleY = Math.min(heightPx - 1, 2);
+      const imageData = canvasContext.getImageData(0, sampleY, widthPx, 1).data;
+      const runs: PixelColorRun[] = [];
+      let currentColor: CanvasColor | undefined;
+      let runStartX = 0;
+      for (let x = 0; x < widthPx; x++) {
+        const i = x * 4;
+        const color = classifyCanvasPixelColor(
+          imageData[i],
+          imageData[i + 1],
+          imageData[i + 2],
+          imageData[i + 3],
+        );
+        if (color !== currentColor) {
+          if (currentColor !== undefined) {
+            runs.push({
+              startX: runStartX,
+              endX: x,
+              color: currentColor,
+            });
+          }
+          currentColor = color;
+          runStartX = x;
+        }
+      }
+      if (currentColor !== undefined) {
+        runs.push({
+          startX: runStartX,
+          endX: widthPx,
+          color: currentColor,
+        });
+      }
+      return runs;
+    }
 
     let offsetAdjustment: number | undefined;
     function getCurrentTime(latestTelemetryRecord: TelemetryRecord) {
@@ -576,12 +643,74 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
           canvasContext.lineTo(x, heightPx);
           canvasContext.stroke();
           canvasContext.restore();
+          if (diagnosticsEnabled) {
+            lastRenderDiagnostics = {
+              chartEdgeTimeMs: timeAtChartEdge,
+              currentTimeMs: time,
+              millisPerPixel: millisPerPixelTweened,
+              jumpOffsetMs: chartJumpingOffsetMs,
+              topColorRuns: getTopColorRuns(),
+            };
+          }
         }
       }
 
       requestAnimationFrame(drawAndScheduleAnother);
     })();
   }
+  type DiagnosticsWindow = Window & {
+    __jumpCutterChartDiagnostics?: {
+      getState: () => unknown,
+    },
+  };
+  function getSeriesDataTail(series: TimeSeries | undefined, maxPoints = 400) {
+    if (!series) {
+      return [];
+    }
+    const data = (series as TimeSeriesWithPrivateFields).data ?? [];
+    return data.slice(-maxPoints).map(([time, value]) => [time, value]);
+  }
+  function getDiagnosticsState() {
+    return {
+      widthPx,
+      heightPx,
+      lengthSeconds,
+      volumeThreshold,
+      latestTelemetryRecord: latestTelemetryRecord
+        ? {
+          intrinsicTime: latestTelemetryRecord.intrinsicTime,
+          inputVolume: latestTelemetryRecord.inputVolume,
+          chartSpeedName: latestTelemetryRecord.chartSpeedName,
+          controllerType: 'controllerType' in latestTelemetryRecord
+            ? latestTelemetryRecord.controllerType
+            : undefined,
+        }
+        : undefined,
+      lastRenderDiagnostics,
+      series: {
+        volume: getSeriesDataTail(volumeSeries),
+        soundedSpeed: getSeriesDataTail(soundedSpeedSeries),
+        silenceSpeed: getSeriesDataTail(silenceSpeedSeries),
+        stretch: getSeriesDataTail(stretchSeries),
+        shrink: getSeriesDataTail(shrinkSeries),
+        threshold: getSeriesDataTail(volumeThresholdSeries, 20),
+      },
+    };
+  }
+  onMount(() => {
+    if (!diagnosticsEnabled) {
+      return;
+    }
+    (window as DiagnosticsWindow).__jumpCutterChartDiagnostics = {
+      getState: getDiagnosticsState,
+    };
+  });
+  onDestroy(() => {
+    if (!diagnosticsEnabled) {
+      return;
+    }
+    delete (window as DiagnosticsWindow).__jumpCutterChartDiagnostics;
+  });
   onMount(initSmoothie);
 
   function appendToSpeedSeries(timeMs: TimeMs, speedName: TelemetryRecord['lastActualPlaybackRateChange']['name']) {
@@ -605,33 +734,36 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
 
   function updateSpeedSeries(newTelemetryRecord: TelemetryRecord) {
     const r = newTelemetryRecord;
-    const speedName = r.lastActualPlaybackRateChange.name;
-    appendToSpeedSeries(convertTimeMs(r.lastActualPlaybackRateChange.time, r, prevPlaybackRateChange), speedName);
+    const timeMs = sToMs(timelineIsMediaIntrinsic ? r.intrinsicTime : r.unixTime);
+    appendToSpeedSeries(timeMs, r.chartSpeedName);
   };
 
-  function updateStretchAndAdjustSpeedSeries(newTelemetryRecord: TelemetryRecord) {
-    assertDev(newTelemetryRecord.lastScheduledStretchInputTime,
-      'Attempted to update stretch series, but stretch is not defined');
-    const stretch = newTelemetryRecord.lastScheduledStretchInputTime;
+  function rewriteStretchAndAdjustSpeedSeries(stretch: StretchTelemetry, newTelemetryRecord: TelemetryRecord) {
     const stretchStartConvertedMs = convertTimeMs(stretch.startTime, newTelemetryRecord, prevPlaybackRateChange);
     const stretchEndConvertedMs = convertTimeMs(stretch.endTime, newTelemetryRecord, prevPlaybackRateChange);
     const stretchOrShrink = stretch.endValue > stretch.startValue
       ? 'stretch'
       : 'shrink';
+
+    timeSeriesDropFutureDataMs(stretchSeries, stretchStartConvertedMs);
+    timeSeriesDropFutureDataMs(shrinkSeries, stretchStartConvertedMs);
     const series = stretchOrShrink === 'stretch'
       ? stretchSeries
       : shrinkSeries;
     series.append(stretchStartConvertedMs, offTheChartsValue);
     series.append(stretchEndConvertedMs, 0);
 
+    // Wipe incorrect historical data over the stretched interval.
+    timeSeriesDropFutureDataMs(silenceSpeedSeries, stretchStartConvertedMs);
+    timeSeriesDropFutureDataMs(soundedSpeedSeries, stretchStartConvertedMs);
+
     // Don't draw actual video playback speed at that period so they don't overlap with stretches.
-    const actualPlaybackRateDuringStretch = stretchOrShrink === 'shrink'
-      ? 'sounded'
-      : 'silence';
     silenceSpeedSeries.append(stretchStartConvertedMs, 0);
     soundedSpeedSeries.append(stretchStartConvertedMs, 0);
-    // We don't have to restore the actual speed line's value after the stretch end, because stretches are always
-    // followed by a speed change (at least at the moment of writing this).
+
+    // We must restore the active speed line's value after the stretch end, otherwise the graph history
+    // drops it and creates a blank gap until the *next* speed change.
+    appendToSpeedSeries(stretchEndConvertedMs, newTelemetryRecord.chartSpeedName);
   }
 
   let totalOutputDelayRealTime = 0;
@@ -661,12 +793,14 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
 
 
   /** An equivalent of `smoothie.prototype.dropOldData` */
-  function timeSeriesDropFutureData(timeSeries: TimeSeries, newestValidTime: MediaTime) {
+  function timeSeriesDropFutureDataMs(timeSeries: TimeSeries, newestValidTimeMs: number) {
     const data = (timeSeries as TimeSeriesWithPrivateFields).data;
-    const newestValidTimeMs = newestValidTime * 1000;
     const firstInvalidInd = data.findIndex(([time]) => time > newestValidTimeMs);
     if (firstInvalidInd < 0) return;
     data.splice(firstInvalidInd);
+  }
+  function timeSeriesDropFutureData(timeSeries: TimeSeries, newestValidTime: MediaTime) {
+    timeSeriesDropFutureDataMs(timeSeries, newestValidTime * 1000);
   }
   function smoothieDropFutureData(smoothie: SmoothieChart, newestValidTime: MediaTime) {
     type SmoothieWithPrivateFields = SmoothieChart & {
@@ -730,14 +864,10 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       lastHandledTelemetryRecord?.lastActualPlaybackRateChange,
       newTelemetryRecord.lastActualPlaybackRateChange,
     );
-    if (speedChanged) {
-      updateSpeedSeries(r);
-
-      // Otherwise it's not required.
-      if (timelineIsMediaIntrinsic) {
-        prevPlaybackRateChange = lastHandledTelemetryRecord?.lastActualPlaybackRateChange;
-      }
+    if (speedChanged && timelineIsMediaIntrinsic) {
+      prevPlaybackRateChange = lastHandledTelemetryRecord?.lastActualPlaybackRateChange;
     }
+    updateSpeedSeries(r);
 
     if (timelineIsMediaIntrinsic && 'lastSilenceSkippingSeek' in r) {
       const lastSilenceSkippingSeek = r.lastSilenceSkippingSeek
@@ -778,17 +908,25 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
 
 
     function areStretchObjectsEqual(
-      stretchA: StretchInfo | undefined | null,
-      stretchB: StretchInfo | undefined | null,
+      stretchA: StretchTelemetry | undefined | null,
+      stretchB: StretchTelemetry | undefined | null,
     ) {
-      return stretchA?.startTime === stretchB?.startTime;
+      return stretchA?.sequenceId === stretchB?.sequenceId;
+    }
+    const interruptedStretch = r.lastInterruptedStretchInputTime;
+    const stretchWasInterrupted = interruptedStretch && !areStretchObjectsEqual(
+      lastHandledTelemetryRecord?.lastInterruptedStretchInputTime,
+      interruptedStretch,
+    );
+    if (stretchWasInterrupted) {
+      rewriteStretchAndAdjustSpeedSeries(interruptedStretch, r);
     }
     const newStretch = r.lastScheduledStretchInputTime && !areStretchObjectsEqual(
       lastHandledTelemetryRecord?.lastScheduledStretchInputTime,
       r.lastScheduledStretchInputTime
     );
     if (newStretch) {
-      updateStretchAndAdjustSpeedSeries(r);
+      rewriteStretchAndAdjustSpeedSeries(r.lastScheduledStretchInputTime, r);
     }
 
     totalOutputDelayRealTime = r.totalOutputDelay;

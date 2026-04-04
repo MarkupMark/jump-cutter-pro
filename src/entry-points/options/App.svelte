@@ -26,6 +26,9 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   import InputFieldBase from './components/InputFieldBase.svelte';
   import { cloneDeepJson, assertDev, assertNever, getMessage } from '@/helpers';
   import {
+    changeAlgorithmAndMaybeRelatedSettings,
+    ControllerKind_CLONING,
+    ControllerKind_STRETCHING,
     defaultSettings,
     filterOutLocalStorageOnlySettings,
     getSettings,
@@ -90,6 +93,16 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     unsaved = false;
   }
   const debouncedSaveSettings = debounce(saveSettings, 50);
+
+  function onUseExperimentalAlgorithmChange(checked: boolean) {
+    const newControllerType = checked
+      ? ControllerKind_CLONING
+      : ControllerKind_STRETCHING;
+    settings = {
+      ...settings,
+      ...changeAlgorithmAndMaybeRelatedSettings(settings, newControllerType),
+    };
+  }
 
   function onResetToDefaultsClick() {
     // TODO looks like `confirm()` doesn't work. Let's create our own `<dialog>`?
@@ -320,6 +333,17 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
           ])}"
           bind:checked={settings.useSeparateMarginSettingsForDifferentAlgorithms}
         />
+        <CheckboxField
+          label="🕰️ {getMessage('useExperimentalAlgorithm')}"
+          checked={settings.experimentalControllerType === ControllerKind_CLONING}
+          on:change={e => {
+            assertDev(e.currentTarget instanceof HTMLInputElement);
+            onUseExperimentalAlgorithmChange(e.currentTarget.checked);
+          }}
+        />
+        <p class="legacy-controller-note">
+          Stretching is the recommended algorithm. Cloning remains available only for legacy compatibility.
+        </p>
       </section>
       <section>
         <h3>{getMessage('hotkeys')}</h3>
@@ -743,6 +767,12 @@ section {
 }
 h1, h2, h3, h4, h5, h6 {
   margin: 0.625rem 0;
+}
+.legacy-controller-note {
+  margin: -0.1rem 0 0.9rem;
+  padding: 0 0.5rem;
+  font-size: 0.92rem;
+  opacity: 0.85;
 }
 .status-bar {
   /* `sticky` sounds tempting, but on mobile it behaves weird,

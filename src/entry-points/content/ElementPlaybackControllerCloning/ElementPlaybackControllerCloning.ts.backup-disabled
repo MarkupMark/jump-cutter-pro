@@ -42,7 +42,6 @@ import {
 } from '../playbackRateChangeTracking';
 import { browserHasAudioDesyncBug } from '@/helpers/browserHasAudioDesyncBug';
 import requestIdlePromise from '../helpers/requestIdlePromise';
-import DiagnosticsAudioCapture, { getMediaElementCaptureStream } from '../diagnosticsAudioCapture';
 
 type Time = AnyTime;
 
@@ -183,8 +182,6 @@ export default class Controller {
   audioContext: AudioContext;
   getVolume: () => number = () => 0;
   _userMutedState: boolean | undefined;
-  /** Saved `element.volume` before we set it to 0 during a silence+speedup phase. */
-  _userVolumeState: number | undefined;
   _lastSilenceSkippingSeek: TimeRange | undefined;
   _lastActualPlaybackRateChange: {
     time: AudioContextTime,
@@ -204,10 +201,6 @@ export default class Controller {
   seekDurationProphet: SeekDurationProphet;
 
   _didNotDoDesyncCorrectionForNSpeedSwitches = 0;
-  private _diagnosticsAudioCapture = new DiagnosticsAudioCapture(
-    () => getMediaElementCaptureStream(this.element),
-    'element-capture',
-  );
 
   // TODO refactor: make this a constructor parameter for this Controller.
   private readonly getMediaSourceCloneElement: ConstructorParameters<typeof Lookahead>[2] =
@@ -215,7 +208,6 @@ export default class Controller {
       /* webpackExports: ['getMediaSourceCloneElement']*/
       '@/entry-points/content/cloneMediaSources/getMediaSourceCloneElement'
     ).then(({ getMediaSourceCloneElement }) => getMediaSourceCloneElement(originalElement));
-  private readonly _onLookaheadRangesChanged = () => this.maybeScheduleMaybeSeekOrSpeedup();
 
   constructor(
     element: HTMLMediaElement,
@@ -229,8 +221,7 @@ export default class Controller {
       element,
       this.settings,
       this.getMediaSourceCloneElement,
-      () => this.clonePlaybackError = true,
-      this._onLookaheadRangesChanged,
+      () => this.clonePlaybackError = true
     );
     // Destruction is performed in `this.destroy` directly.
     lookahead.ensureInit();
@@ -268,10 +259,6 @@ export default class Controller {
       if (this._userMutedState !== undefined) {
         element.muted = this._userMutedState;
       }
-      if (this._userVolumeState !== undefined) {
-        element.volume = this._userVolumeState;
-      }
-      this._diagnosticsAudioCapture.destroy();
     });
 
     toAwait.push(this.lookahead!.ensureInit().then(() => {
@@ -311,6 +298,7 @@ export default class Controller {
     }
     element.addEventListener('emptied', onOldSrcGone, { passive: true });
     this._destroyedPromise.then(() => element.removeEventListener('emptied', onOldSrcGone));
+
     {
       // TODO refactor: abstract this into a function that returns `getVolume`.
       // This is not strictly necessary, so not pushing anything to `toAwait`.
@@ -357,11 +345,14 @@ export default class Controller {
           return volumeFilter;
         });
 
+        // The following paragraph is pretty stupid because Web Audio API is still pretty new.
+        // Or because I'm pretty new to it.
         let source: MediaStreamAudioSourceNode;
         let reinitScheduled = false;
         const reinit = () => {
           source?.disconnect();
           let newStream;
+          // `try` because see the `catch` block.
           try {
             newStream = captureStream();
           } catch (e) {
@@ -371,6 +362,7 @@ export default class Controller {
             }
           }
           if (newStream) {
+            // Shouldn't we do something if there are no tracks?
             if (newStream.getAudioTracks().length) {
               source = audioContext.createMediaStreamSource(newStream);
               volumeFilterP.then(filter => source.connect(filter));
@@ -386,6 +378,8 @@ export default class Controller {
           }
         }
 
+        // This means that the 'playing' has already been emited.
+        // https://html.spec.whatwg.org/multipage/media.html#mediaevents:event-media-playing
         const nowPlaying = element.readyState > HTMLMediaElement.HAVE_FUTURE_DATA && !element.paused;
         const canCaptureStreamNow = nowPlaying;
         if (canCaptureStreamNow) {
@@ -393,6 +387,8 @@ export default class Controller {
         }
         const alreadyInitialized = canCaptureStreamNow;
 
+        // Workaround for
+        // https://bugzilla.mozilla.org/show_bug.cgi?id=1178751
         if (BUILD_DEFINITIONS.BROWSER === 'gecko') {
           const mozCaptureStreamUsed = !unprefixedCaptureStreamPresent;
           if (mozCaptureStreamUsed) {
@@ -404,6 +400,9 @@ export default class Controller {
           }
         }
 
+        // Hopefully this covers all cases where the `MediaStreamAudioSourceNode` stops working.
+        // 'loadstart' is for when the source changes, 'ended' speaks for itself.
+        // https://w3c.github.io/mediacapture-fromelement/#dom-htmlmediaelement-capturestream
         let unhandledLoadstartOrEndedEvent = alreadyInitialized ? false : true;
         const onPlaying = () => {
           if (unhandledLoadstartOrEndedEvent) {
@@ -428,6 +427,8 @@ export default class Controller {
         volumeFilterP.then(volumeFilter => {
           volumeFilter.connect(analyser);
         });
+        // Using the minimum possible value for performance, as we're only using the node to get unchanged
+        // output values.
         const volumeBuffer = new Float32Array(analyser.fftSize);
         const volumeBufferLastInd = volumeBuffer.length - 1;
         this.getVolume = () => {
@@ -778,7 +779,7 @@ export default class Controller {
       this.settings,
       this.getMediaSourceCloneElement,
       () => this.clonePlaybackError = true,
-      this._onLookaheadRangesChanged,
+      () => this.maybeScheduleMaybeSeekOrSpeedup(),
     );
     // Destruction is performed in `this.destroy` directly.
     lookahead.ensureInit();
@@ -887,17 +888,17 @@ export default class Controller {
     }
 
     if (speedName === SpeedName.SILENCE) {
+      if (this._userMutedState === undefined) {
+        this._userMutedState = this.element.muted;
+      }
       if (this.settings.muteSilences) {
-        if (this._userVolumeState === undefined) {
-          this._userVolumeState = this.element.volume;
-        }
-        this.element.volume = 0;
+        this.element.muted = true;
       }
     } else {
-      if (this._userVolumeState !== undefined) {
-        this.element.volume = this._userVolumeState;
-        this._userVolumeState = undefined;
+      if (this.settings.muteSilences && this._userMutedState !== undefined) {
+        this.element.muted = this._userMutedState;
       }
+      this._userMutedState = undefined;
     }
 
     if (IS_DEV_MODE) {
@@ -947,13 +948,5 @@ export default class Controller {
       // lastScheduledStretch: this._stretcherAndPitch.lastScheduledStretch,
       // lastScheduledStretchInputTime: undefined,
     };
-  }
-
-  startDiagnosticsAudioCapture() {
-    return this._diagnosticsAudioCapture.start();
-  }
-
-  stopDiagnosticsAudioCapture() {
-    return this._diagnosticsAudioCapture.stop();
   }
 }

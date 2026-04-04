@@ -24,6 +24,10 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   export let value: number;
   export let label: string;
   export let fractionalDigits: number = 3;
+  export let valueScale: number = 1;
+  export let min: number | string | undefined = undefined;
+  export let max: number | string | undefined = undefined;
+  export let step: number | string | undefined = undefined;
 
   type SvelteActionParameters = any;
   type SvelteAction = (node: HTMLElement, parameters: SvelteActionParameters) => {
@@ -34,9 +38,29 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   export let useForInput: SvelteAction = () => ({});
   export let useForInputParams: SvelteActionParameters = undefined;
 
-  // export let max;
-  // export let min;
-  // export let step;
+  let displayedValue: number;
+
+  function scaleInputAttr(val: number | string | undefined) {
+    if (val == undefined || val === '') {
+      return val;
+    }
+
+    const numericVal = Number(val);
+    if (Number.isFinite(numericVal)) {
+      return numericVal * valueScale;
+    }
+
+    return val;
+  }
+
+  $: displayedValue = value * valueScale;
+  $: displayedMin = scaleInputAttr(min);
+  $: displayedMax = scaleInputAttr(max);
+  $: displayedStep = scaleInputAttr(step);
+
+  function onInputSyncScaledValue() {
+    value = displayedValue / valueScale;
+  }
 </script>
 
 <!-- Disabling the warning because it's false – apparently, it can't detect an input if it's not a direct child.
@@ -48,14 +72,18 @@ TODO. -->
     <input
       type="range"
       {...$$restProps}
-      bind:value
+      bind:value={displayedValue}
+      min={displayedMin}
+      max={displayedMax}
+      step={displayedStep}
       use:useForInput={useForInputParams}
+      on:input={onInputSyncScaledValue}
       on:input
     >
     <span
       aria-hidden="true"
       class="number-representation"
-    >{value.toFixed(fractionalDigits)}</span>
+    >{displayedValue.toFixed(fractionalDigits)}</span>
   </div>
 </label>
 

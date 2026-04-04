@@ -62,8 +62,16 @@ export default class StretcherAndPitchCorrectorNode {
   private slowDownPitchShift: PitchShift;
   private originalPitchCompensationDelay: DelayNode;
   private delayNode: DelayNode;
-  lastScheduledStretch?: StretchInfo & { speedupOrSlowdown: PitchSetting.SPEEDUP | PitchSetting.SLOWDOWN };
+  lastScheduledStretch?: StretchInfo & {
+    speedupOrSlowdown: PitchSetting,
+    sequenceId: number,
+  };
+  lastInterruptedStretch?: StretchInfo & {
+    speedupOrSlowdown: PitchSetting,
+    sequenceId: number,
+  };
   private lastElementSpeedChangeAtInputTime?: AudioContextTime;
+  private stretchSequenceId = 0;
 
   constructor(
     private context: AudioContext,
@@ -95,8 +103,9 @@ export default class StretcherAndPitchCorrectorNode {
     // 1. Withing the range recommended by Tone.js documentation:
     // https://tonejs.github.io/docs/14.7.39/PitchShift#windowSize
     // 2. I played around with it a bit and this sounded best for me.
+    // Changed to 0.04 to reduce metallic artifacts when margins > 0 (resolving user issue).
     // TODO make it into a setting?
-    const windowSize = 0.1;
+    const windowSize = 0.04;
     this.speedUpPitchShift.windowSize = windowSize;
     this.slowDownPitchShift.windowSize = windowSize;
 
@@ -317,34 +326,41 @@ export default class StretcherAndPitchCorrectorNode {
       .setValueAtTime(startValue, startTime)
       .linearRampToValueAtTime(endValue, endTime);
     const speedupOrSlowdown = endValue > startValue ? PitchSetting.SLOWDOWN : PitchSetting.SPEEDUP;
-    this.setOutputPitchAt(
-      speedupOrSlowdown,
-      startTime,
-      PitchSetting.NORMAL
-    );
-    this.setOutputPitchAt(PitchSetting.NORMAL, endTime, speedupOrSlowdown);
+    // Speeding up mostly affects silent/near-silent snippets. Bypassing Tone's PitchShift there
+    // avoids the metallic artifacts users hear on accelerated silence tails.
+    const pitchSettingDuringStretch = speedupOrSlowdown === PitchSetting.SPEEDUP
+      ? PitchSetting.NORMAL
+      : speedupOrSlowdown;
+    if (pitchSettingDuringStretch !== PitchSetting.NORMAL) {
+      this.setOutputPitchAt(
+        pitchSettingDuringStretch,
+        startTime,
+        PitchSetting.NORMAL
+      );
+      this.setOutputPitchAt(PitchSetting.NORMAL, endTime, pitchSettingDuringStretch);
+    }
 
     const speedChangeMultiplier = getStretchSpeedChangeMultiplier({ startValue, endValue, startTime, endTime });
     // So it is changed a bit earlier to make sure that tail time has passed and the pitch value is what we want it to
     // be.
     const earlierBy = 0.05;
     // Acutally we only need to do this when the user changes settings.
-    setTimeout(() => {
-      function speedChangeMultiplierToSemitones(m: number) {
-        return -12 * Math.log2(m);
-      }
-      const node = speedupOrSlowdown === PitchSetting.SPEEDUP
-        ? this.speedUpPitchShift
-        : this.slowDownPitchShift;
-      node.pitch = speedChangeMultiplierToSemitones(speedChangeMultiplier);
-    }, (startTime - this.context.currentTime - earlierBy) * 1000);
+    if (pitchSettingDuringStretch !== PitchSetting.NORMAL) {
+      setTimeout(() => {
+        function speedChangeMultiplierToSemitones(m: number) {
+          return -12 * Math.log2(m);
+        }
+        this.slowDownPitchShift.pitch = speedChangeMultiplierToSemitones(speedChangeMultiplier);
+      }, (startTime - this.context.currentTime - earlierBy) * 1000);
+    }
 
     this.lastScheduledStretch = {
       startValue,
       endValue,
       startTime,
       endTime,
-      speedupOrSlowdown,
+      speedupOrSlowdown: pitchSettingDuringStretch,
+      sequenceId: ++this.stretchSequenceId,
     };
 
     if (IS_DEV_MODE) {
@@ -375,7 +391,9 @@ export default class StretcherAndPitchCorrectorNode {
     for (const node of allGainNodes) {
       node.gain.cancelScheduledValues(interruptAtTime);
     }
-    this.setOutputPitchAt(PitchSetting.NORMAL, interruptAtTime, this.lastScheduledStretch.speedupOrSlowdown);
+    if (this.lastScheduledStretch.speedupOrSlowdown !== PitchSetting.NORMAL) {
+      this.setOutputPitchAt(PitchSetting.NORMAL, interruptAtTime, this.lastScheduledStretch.speedupOrSlowdown);
+    }
 
     if (IS_DEV_MODE) {
       const lateBy = this.context.currentTime - interruptAtTime;
@@ -393,6 +411,15 @@ export default class StretcherAndPitchCorrectorNode {
           + ' Make sure you have the consequences handled.');
       }
     }
+
+    const interruptedStretch = {
+      ...this.lastScheduledStretch,
+      endValue: interruptAtTimeValue,
+      endTime: interruptAtTime,
+      sequenceId: ++this.stretchSequenceId,
+    };
+    this.lastInterruptedStretch = interruptedStretch;
+    this.lastScheduledStretch = interruptedStretch;
   }
 
   // setDelay(value: Time): void {

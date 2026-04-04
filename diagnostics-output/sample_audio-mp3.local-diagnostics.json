@@ -1,0 +1,236 @@
+{
+  "createdAt": "2026-03-11T17:01:58.012Z",
+  "extensionId": "ahnccnkdcpnpchgnglebcngembledicm",
+  "executablePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "filePath": "/Users/marco/Documents/trasfer AG Projects/jumpcutter/sample_audio.mp3",
+  "durationMs": 10135.51,
+  "silenceRanges": [
+    {
+      "startMs": 0,
+      "endMs": 103.651
+    },
+    {
+      "startMs": 978.821,
+      "endMs": 1081.451
+    },
+    {
+      "startMs": 1131.859,
+      "endMs": 2726.4629999999997
+    },
+    {
+      "startMs": 4263.243,
+      "endMs": 4479.388
+    },
+    {
+      "startMs": 5145.306,
+      "endMs": 5280.408
+    },
+    {
+      "startMs": 5797.2789999999995,
+      "endMs": 5911.429
+    },
+    {
+      "startMs": 6110.974999999999,
+      "endMs": 6253.9
+    },
+    {
+      "startMs": 6384.717000000001,
+      "endMs": 6519.932
+    },
+    {
+      "startMs": 7044.331,
+      "endMs": 7182.54
+    },
+    {
+      "startMs": 8287.256,
+      "endMs": 8827.732
+    },
+    {
+      "startMs": 9671.293,
+      "endMs": 9768.594000000001
+    }
+  ],
+  "runs": [
+    {
+      "controller": "stretching",
+      "passed": false,
+      "issues": [
+        "Muted silence output is still too loud (RMS 0.0583)",
+        "Muted silence output still peaks too high (0.4564)"
+      ],
+      "metrics": {
+        "playbackEnded": true,
+        "wallElapsedMs": 7403.7,
+        "mediaDurationMs": 10135.51,
+        "wallToMediaRatio": 0.73,
+        "seekingEvents": 1,
+        "telemetrySamples": 60,
+        "telemetry": {
+          "silenceShareOnSound": 0.16,
+          "silenceShareOnSilence": 1,
+          "totalSamples": 60
+        },
+        "chart": {
+          "redShareOnSound": 0.2806837530923363,
+          "redShareOnSilence": 1.0034476524737084,
+          "visibleStartMs": 2055.51,
+          "visibleEndMs": 10055.51
+        },
+        "popupConnected": true,
+        "latestTelemetryRecord": {
+          "unixTime": 1773248526.309,
+          "intrinsicTime": 10.13551,
+          "elementPlaybackActive": false,
+          "contextTime": 7.210666666666667,
+          "inputVolume": 0.0054240236058831215,
+          "chartSpeedName": 1,
+          "outputGain": 0.009999999776482582,
+          "outputLowPassHz": 900,
+          "lastActualPlaybackRateChange": {
+            "name": 1,
+            "time": 7.176,
+            "value": 4
+          },
+          "elementVolume": 1,
+          "totalOutputDelay": 0.05999999865889549,
+          "delayFromInputToStretcherOutput": 0.03999999910593033,
+          "stretcherDelay": 0,
+          "sessionTimeSaved": {
+            "timeSavedComparedToSoundedSpeed": 5.673778972018123,
+            "timeSavedComparedToIntrinsicSpeed": 5.673778972018123,
+            "wouldHaveLastedIfSpeedWasSounded": 12.635841686918035,
+            "wouldHaveLastedIfSpeedWasIntrinsic": 12.635841686918035
+          },
+          "lifetimeTimeSaved": {
+            "timeSavedComparedToIntrinsicSpeed": 5.753999999999999,
+            "timeSavedComparedToSoundedSpeed": 5.753999999999999,
+            "wouldHaveLastedIfSpeedWasIntrinsic": 12.794,
+            "wouldHaveLastedIfSpeedWasSounded": 12.794
+          },
+          "controllerType": 1,
+          "elementLikelyCorsRestricted": false,
+          "createMediaElementSourceCalledForElement": true,
+          "elementRemainingIntrinsicDuration": 0
+        },
+        "audioCaptureStart": {
+          "started": true,
+          "source": "processed-output",
+          "mimeType": "audio/webm;codecs=opus"
+        },
+        "audioCaptureMimeType": "audio/webm;codecs=opus",
+        "audioLevels": {
+          "sampleRate": 16000,
+          "sound": {
+            "durationMs": 4393,
+            "rms": 0.10623,
+            "peak": 0.97496
+          },
+          "silence": {
+            "durationMs": 126.3,
+            "rms": 0.0583,
+            "peak": 0.4564
+          },
+          "silenceToSoundRmsRatio": 0.5488
+        },
+        "speedupSilenceAlignment": {
+          "timeline": "intrinsicTime",
+          "playbackSpeedupDurationMs": 4289,
+          "telemetrySilenceDurationMs": 3993.4,
+          "overlapDurationMs": 3016.6,
+          "speedupWithoutSilenceDurationMs": 1272.4,
+          "silenceWithoutSpeedupDurationMs": 976.8,
+          "speedupMatchedShare": 0.703,
+          "silenceMatchedShare": 0.755,
+          "playbackSilenceIntervals": 14,
+          "telemetrySilenceIntervals": 8,
+          "leadingSpeedupWithoutSilence": [
+            {
+              "startMs": 7281,
+              "endMs": 7524.8,
+              "durationMs": 243.8,
+              "uncoveredMs": 243.8,
+              "coveredShare": 0
+            },
+            {
+              "startMs": 801.1,
+              "endMs": 2760.9,
+              "durationMs": 1959.7,
+              "uncoveredMs": 174.1,
+              "coveredShare": 0.911
+            },
+            {
+              "startMs": 0,
+              "endMs": 167.6,
+              "durationMs": 167.6,
+              "uncoveredMs": 167.6,
+              "coveredShare": 0
+            },
+            {
+              "startMs": 317.9,
+              "endMs": 483.4,
+              "durationMs": 165.4,
+              "uncoveredMs": 165.4,
+              "coveredShare": 0
+            },
+            {
+              "startMs": 5781.1,
+              "endMs": 5911.7,
+              "durationMs": 130.6,
+              "uncoveredMs": 130.6,
+              "coveredShare": 0
+            }
+          ],
+          "leadingSilenceWithoutSpeedup": [
+            {
+              "startMs": 4398,
+              "endMs": 4770.9,
+              "durationMs": 372.9,
+              "uncoveredMs": 253.9,
+              "coveredShare": 0.319
+            },
+            {
+              "startMs": 8317.2,
+              "endMs": 9017.9,
+              "durationMs": 700.6,
+              "uncoveredMs": 196.3,
+              "coveredShare": 0.72
+            },
+            {
+              "startMs": 5551.3,
+              "endMs": 5717.8,
+              "durationMs": 166.5,
+              "uncoveredMs": 166.5,
+              "coveredShare": 0
+            },
+            {
+              "startMs": 6185,
+              "endMs": 6587,
+              "durationMs": 402.1,
+              "uncoveredMs": 110.1,
+              "coveredShare": 0.726
+            },
+            {
+              "startMs": 5267.2,
+              "endMs": 5438.6,
+              "durationMs": 171.4,
+              "uncoveredMs": 101.8,
+              "coveredShare": 0.406
+            }
+          ]
+        },
+        "silenceOutputGainTelemetry": {
+          "silenceSamples": 18,
+          "lowGainThreshold": 0.02,
+          "lowGainSamples": 18,
+          "lowGainShare": 1,
+          "minOutputGain": 0.01,
+          "maxOutputGain": 0.01,
+          "medianOutputGain": 0.01
+        }
+      },
+      "screenshotPath": "/Users/marco/Documents/trasfer AG Projects/jumpcutter/diagnostics-output/sample_audio-mp3-stretching-popup.png",
+      "audioPath": "/Users/marco/Documents/trasfer AG Projects/jumpcutter/diagnostics-output/sample_audio-mp3-stretching-audio.webm"
+    }
+  ],
+  "passed": false
+}

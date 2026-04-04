@@ -23,7 +23,7 @@ import { maxPlaybackRate } from '@/helpers/maxPlaybackRate';
 
 // TODO This is a temporary measure to avoid setting playbackRate to an unsupported values
 // - the user can still set higher playbackRate
-// (e.g. by setting `soundedSpeed` to 2 & `silenceSpeedRaw` to 2.5), but he will be confused why it's capped at 4.
+// (e.g. by setting `soundedSpeed` to 2 & `silenceSpeedRaw` to 12), but he will be confused why it's capped.
 // Also browser may change these values in the future. Add a setting? Or add `try ... catch` to where
 // we assign to `.playbackRate`?
 export function getAbsoluteClampedSilenceSpeed(
