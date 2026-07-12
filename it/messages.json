@@ -1,1 +1,23 @@
-{}
+{
+  "muteSilences": {
+    "message": "Azzera volume durante i silenzi"
+  },
+  "transientNoiseFilterEnabled": {
+    "message": "Filtro rumori transitori"
+  },
+  "transientNoiseFilterEnabledTooltip": {
+    "message": "Ignora suoni brevi e improvvisi (es. tap sul microfono, click tastiera) più brevi della durata minima. Evita che interrompano la velocizzazione dei silenzi."
+  },
+  "transientNoiseFilterMinSoundedDurationMs": {
+    "message": "Durata minima suono (ms)"
+  },
+  "transientNoiseFilterMinSoundedDurationMsTooltip": {
+    "message": "Suoni brevi al di sotto di questo valore (in millisecondi) vengono ignorati. Default: 30ms."
+  },
+  "soundedSpeed": {
+    "message": "Velocita di riproduzione"
+  },
+  "soundedSpeedTooltip": {
+    "message": "La velocita a cui riproduciamo il video quando NON e silenzioso, cioe la normale velocita di riproduzione.\nNel grafico, le parti riprodotte a questa velocita hanno sfondo verde 🟩."
+  }
+}
