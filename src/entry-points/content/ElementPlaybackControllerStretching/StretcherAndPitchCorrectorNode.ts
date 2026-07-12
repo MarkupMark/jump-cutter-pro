@@ -148,7 +148,10 @@ export default class StretcherAndPitchCorrectorNode {
   }
   connect = this.connectOutputTo;
 
-  onSilenceEnd(elementSpeedSwitchedAt: AudioContextTime): void {
+  /**
+   * @returns The output time at which the first sounded sample reaches the output chain.
+   */
+  onSilenceEnd(elementSpeedSwitchedAt: AudioContextTime): AudioContextTime {
     // If you feel like your head is about to explode, check out `silenceDetector.port.onmessage = ` in
     // `ElementPlaybackControllerCloning/Lookahead.ts` first. This code kind of does the same.
     // Consider reading it backwards since all we do is compute stretch parameters.
@@ -157,9 +160,16 @@ export default class StretcherAndPitchCorrectorNode {
     // TODO all this does look like it may cause a snowballing floating point error. Mathematically simplify this?
     // Or just use if-else?
 
-    // These are guaranteed to be non-null, because `onSilenceStart` is always called
-    // before `onSilenceEnd`.
-    assertDev(this.lastScheduledStretch && this.lastElementSpeedChangeAtInputTime);
+    // A zero marginBefore produces no delay ramp, so `stretch()` intentionally does not create a
+    // `lastScheduledStretch`. There is nothing to recover in that case: map the sounded boundary
+    // through the unchanged delay and keep the state ready for the next transition.
+    if (!this.lastScheduledStretch || this.lastElementSpeedChangeAtInputTime == null) {
+      this.lastElementSpeedChangeAtInputTime = elementSpeedSwitchedAt;
+      return elementSpeedSwitchedAt
+        + getDelayFromInputToStretcherOutput(this.getLookaheadDelay(), this.stretcherDelay)
+        + this.pitchCorrectorDelay;
+    }
+
     const lastScheduledStretcherDelayReset = this.lastScheduledStretch;
     const lastElementSpeedChangeAtInputTime = this.lastElementSpeedChangeAtInputTime;
     this.lastElementSpeedChangeAtInputTime = elementSpeedSwitchedAt;
@@ -248,8 +258,12 @@ export default class StretcherAndPitchCorrectorNode {
     // A.k.a. `marginBeforePartAtSilenceSpeedStartOutputTime + silenceSpeedPartStretchedDuration`
     const endTime = elementSpeedSwitchedAt + getDelayFromInputToStretcherOutput(lookaheadDelay, finalStretcherDelay);
     this.stretch(startValue, endValue, startTime, endTime);
+    return endTime + this.pitchCorrectorDelay + CROSS_FADE_DURATION / 2;
   }
-  onSilenceStart(elementSpeedSwitchedAt: AudioContextTime): void {
+  /**
+   * @returns The output time at which accelerated audio starts reaching the output chain.
+   */
+  onSilenceStart(elementSpeedSwitchedAt: AudioContextTime): AudioContextTime {
     this.lastElementSpeedChangeAtInputTime = elementSpeedSwitchedAt; // See the same assignment in `onSilenceEnd`.
 
     const settings = this.getSettings();
@@ -276,6 +290,7 @@ export default class StretcherAndPitchCorrectorNode {
       startTime,
       endTime,
     );
+    return startTime + this.pitchCorrectorDelay;
   }
 
   private setOutputPitchAt(pitchSetting: PitchSetting, time: AudioContextTime, oldPitchSetting: PitchSetting) {

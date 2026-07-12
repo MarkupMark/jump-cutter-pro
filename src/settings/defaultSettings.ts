@@ -22,7 +22,7 @@ import { enabledSettingDefaultValue, OppositeDayMode } from './';
 import type { Settings } from './';
 import { ControllerKind } from './ControllerKind';
 import { HotkeyAction } from '@/hotkeys';
-import { getGeckoLikelyMaxNonMutedPlaybackRate } from '@/helpers';
+import { maxSilencePlaybackRate } from '@/helpers';
 import { browserHasAudioDesyncBug } from '@/helpers/browserHasAudioDesyncBug';
 import { isMobile } from '@/helpers/isMobile';
 
@@ -215,10 +215,7 @@ export const defaultSettings: Readonly<Settings> = {
   popupSilenceSpeedRawMin: 1,
   // See the comment in `getAbsoluteClampedSilenceSpeed` definition on why `max` is different
   // for different browsers.
-  popupSilenceSpeedRawMax: BUILD_DEFINITIONS.BROWSER === 'gecko'
-    // But if the browser gets upgraded, this will remain at the previously detected limit. Doesn't matter?
-    ? Math.min(16, getGeckoLikelyMaxNonMutedPlaybackRate())
-    : 16,
+  popupSilenceSpeedRawMax: maxSilencePlaybackRate,
   popupSilenceSpeedRawStep: 0.05,
 
   popupMarginBeforeMin: 0,

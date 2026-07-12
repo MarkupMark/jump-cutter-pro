@@ -26,3 +26,6 @@ import { getGeckoLikelyMaxNonMutedPlaybackRate } from '@/helpers';
 export const maxPlaybackRate = BUILD_DEFINITIONS.BROWSER === 'gecko'
   ? getGeckoLikelyMaxNonMutedPlaybackRate()
   : 16;
+
+// Product limit for playback while speeding through silent sections.
+export const maxSilencePlaybackRate = Math.min(8, maxPlaybackRate);

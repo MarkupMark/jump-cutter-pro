@@ -19,7 +19,7 @@
  */
 
 import type { Settings } from './';
-import { maxPlaybackRate } from '@/helpers/maxPlaybackRate';
+import { maxSilencePlaybackRate } from '@/helpers/maxPlaybackRate';
 
 // TODO This is a temporary measure to avoid setting playbackRate to an unsupported values
 // - the user can still set higher playbackRate
@@ -33,8 +33,8 @@ export function getAbsoluteClampedSilenceSpeed(
     ? settings.silenceSpeedRaw * settings.soundedSpeed
     : settings.silenceSpeedRaw;
 
-  if (val > maxPlaybackRate) {
-    val = maxPlaybackRate;
+  if (val > maxSilencePlaybackRate) {
+    val = maxSilencePlaybackRate;
   }
   return val;
 }

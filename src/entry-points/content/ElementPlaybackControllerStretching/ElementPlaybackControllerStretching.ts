@@ -63,6 +63,18 @@ const OUTPUT_TRANSITION_TO_SOUNDED_DURATION = 0.015;
 const NORMAL_OUTPUT_LOW_PASS_HZ = 20_000;
 const MIN_SILENCE_OUTPUT_LOW_PASS_HZ = 900;
 const SILENCE_OUTPUT_GAIN_FLOOR = 0;
+// Chromium's old playback-rate desync was fixed for normal speeds, but repeatedly switching to
+// unusually high rates (the extension now supports up to 16x) can still make decoded audio run
+// ahead of video. A tiny seek flushes/reanchors the media pipeline, just like a manual seek does.
+const HIGH_SPEED_DESYNC_CORRECTION_MIN_RATE = 4;
+const DESYNC_CORRECTION_SEEK_BACK_SECONDS = 1e-6;
+const MIN_TIME_BETWEEN_DESYNC_CORRECTIONS = 5;
+
+function getHighSpeedDesyncCorrectionInterval(silenceSpeed: number): number {
+  if (silenceSpeed >= 12) return 3;
+  if (silenceSpeed >= 8) return 5;
+  return 10;
+}
 
 const logging = IS_DEV_MODE && false;
 
@@ -177,10 +189,12 @@ export default class Controller {
     name: SpeedName,
   };
   _didNotDoDesyncCorrectionForNSpeedSwitches = 0;
+  _lastDesyncCorrectionAt?: AudioContextTime;
   _mutingGainNode?: GainNode;
-  /** We track gain ourselves because `AudioParam.value` can return stale values
-   * in Chromium when scheduled automations (ramps) are active. */
-  _lastGainValue = 1;
+  _lastScheduledOutputProfile = {
+    gain: 1,
+    lowPassHz: NORMAL_OUTPUT_LOW_PASS_HZ,
+  };
   _diagnosticsCaptureNode?: MediaStreamAudioDestinationNode;
   _diagnosticsAudioCapture = new DiagnosticsAudioCapture(
     () => {
@@ -245,6 +259,16 @@ export default class Controller {
     const element = this.element;
 
     const toAwait: Array<Promise<void>> = [];
+
+    // Any user/site seek already reanchors audio and video, so restart the automatic correction
+    // counter instead of issuing another micro-seek shortly afterwards.
+    const resetDesyncCorrectionCounter = () => {
+      this._didNotDoDesyncCorrectionForNSpeedSwitches = 0;
+    };
+    element.addEventListener('seeking', resetDesyncCorrectionCounter, { passive: true });
+    this._destroyedPromise.then(() => {
+      element.removeEventListener('seeking', resetDesyncCorrectionCounter);
+    });
 
     const {
       playbackRate: elementPlaybackRateBeforeInitialization,
@@ -448,7 +472,7 @@ export default class Controller {
           // Keep in mind that we need to do `el.playbackRate =` as fast as possible here in order to not
           // skip over the start of the sentence.
           // TODO improvement: how about get `elementSpeedSwitchedAt` from 'ratechange' e.timestamp?
-          elementSpeedSwitchedAt = this._setSpeedAndLog(SpeedName.SOUNDED);
+          elementSpeedSwitchedAt = this._setSpeedAndLog(SpeedName.SOUNDED, false);
           // But we're not really in a hurry to perform `onSilenceEnd` or `onSilenceStart` because there's
           // a lookahead delay (this._lookahear) so the sound doesn't get output immediately.
           // https://github.com/WofWca/jumpcutter/blob/81b4e507b68d9f7c50e90161326edc65038ae28c/src/entry-points/content/helpers/getOptimalLookaheadDelay.ts#L30-L37
@@ -456,21 +480,35 @@ export default class Controller {
           // in a `setTimeout / queueMicrotask` could make the browser actually switch the speed faster?
           // Or is it always performed synchronously?
           // https://html.spec.whatwg.org/multipage/media.html#dom-media-playbackrate
-          this._stretcherAndPitch?.onSilenceEnd(elementSpeedSwitchedAt);
+          const soundedOutputStartsAt = this._stretcherAndPitch
+            ?.onSilenceEnd(elementSpeedSwitchedAt);
+          this._scheduleOutputProfile(
+            SpeedName.SOUNDED,
+            soundedOutputStartsAt ?? this._getOutputTimeForInputTime(elementSpeedSwitchedAt)
+          );
         } else {
-          elementSpeedSwitchedAt = this._setSpeedAndLog(SpeedName.SILENCE);
-          this._stretcherAndPitch?.onSilenceStart(elementSpeedSwitchedAt);
+          elementSpeedSwitchedAt = this._setSpeedAndLog(SpeedName.SILENCE, false);
+          const acceleratedOutputStartsAt = this._stretcherAndPitch
+            ?.onSilenceStart(elementSpeedSwitchedAt);
+          this._scheduleOutputProfile(
+            SpeedName.SILENCE,
+            acceleratedOutputStartsAt ?? this._getOutputTimeForInputTime(elementSpeedSwitchedAt)
+          );
 
-          if (browserHasAudioDesyncBug && this.settings.enableDesyncCorrection) {
+          const needsLegacyDesyncCorrection =
+            browserHasAudioDesyncBug && this.settings.enableDesyncCorrection;
+          const needsHighSpeedDesyncCorrection =
+            BUILD_DEFINITIONS.BROWSER === 'chromium'
+            && this.settings.silenceSpeed >= HIGH_SPEED_DESYNC_CORRECTION_MIN_RATE;
+          if (needsLegacyDesyncCorrection || needsHighSpeedDesyncCorrection) {
             // A workaround for
             // https://bugs.chromium.org/p/chromium/issues/detail?id=1231093
             // https://issues.chromium.org/issues/40190553
             // (or https://github.com/vantezzen/skip-silence/issues/28).
             // Idea: https://github.com/vantezzen/skip-silence/issues/28#issuecomment-714317921
-            // TODO remove it after some time, this has been fixed in Chromium 128.
-            // When removing, don't forget to:
-            // - Remove the settings key from storage.
-            // - Remove the translation string.
+            // The original bug was fixed in Chromium 128, but the extension's newer 4x-16x
+            // playback rates can still accumulate the same observable drift. At those rates the
+            // correction is automatic even when the legacy setting is off.
             //
             // Gecko doesn't have this problem (anymore?). Maybe thanks to this
             // https://bugzilla.mozilla.org/show_bug.cgi?id=1712595
@@ -480,25 +518,39 @@ export default class Controller {
             // `marginAfter` ensures there's plenty of it.
             // Actually, I don't experience any inconveniences even when it's set to 1. But rewinds actually create short
             // pauses, so let's give it some bigger value.
-            const DO_DESYNC_CORRECTION_EVERY_N_SPEED_SWITCHES = 10;
+            const doDesyncCorrectionEveryNSpeedSwitches = needsHighSpeedDesyncCorrection
+              ? getHighSpeedDesyncCorrectionInterval(this.settings.silenceSpeed)
+              : 10;
             // Yes, we only increase the counter when switching to silenceSpeed, which makes the name incorrect.
             // Cry about it.
             this._didNotDoDesyncCorrectionForNSpeedSwitches++;
+            const enoughTimePassedSinceLastCorrection =
+              this._lastDesyncCorrectionAt == null
+              || elementSpeedSwitchedAt - this._lastDesyncCorrectionAt
+                >= MIN_TIME_BETWEEN_DESYNC_CORRECTIONS;
             if (
-              this._didNotDoDesyncCorrectionForNSpeedSwitches >= DO_DESYNC_CORRECTION_EVERY_N_SPEED_SWITCHES
+              this._didNotDoDesyncCorrectionForNSpeedSwitches >= doDesyncCorrectionEveryNSpeedSwitches
+              && enoughTimePassedSinceLastCorrection
               // At least on YouTube, when the video is ended, performing a really short seek
               // causes it to start over for some reason:
               // https://github.com/WofWca/jumpcutter/issues/91
               && !element.ended
+              && !element.seeking
             ) {
               // `+=` actually makes more sense to me here because the past frames might get
               // discarded by the browser and maybe it'll have to re-buffer them. But
               // based on a bit of testing using seeking with `+=` took 132ms on average,
               // while `-=` 103.6. So I'll not be touching it for now.
-              element.currentTime -= 1e-9;
+              element.currentTime = Math.max(
+                0,
+                element.currentTime - DESYNC_CORRECTION_SEEK_BACK_SECONDS
+              );
               // TODO but it's also corrected when the user seeks the video manually.
               this._didNotDoDesyncCorrectionForNSpeedSwitches = 0;
+              this._lastDesyncCorrectionAt = elementSpeedSwitchedAt;
             }
+          } else {
+            this._didNotDoDesyncCorrectionForNSpeedSwitches = 0;
           }
         }
 
@@ -662,10 +714,64 @@ export default class Controller {
     };
   }
 
+  private _getOutputTimeForInputTime(inputTime: AudioContextTime): AudioContextTime {
+    const lookaheadDelay = this._lookahead?.delayTime.value ?? 0;
+    const stretcherDelay = this._stretcherAndPitch?.stretcherDelay ?? 0;
+    const pitchCorrectorDelay = this._stretcherAndPitch?.pitchCorrectorDelay ?? 0;
+    return inputTime + getTotalOutputDelay(lookaheadDelay, stretcherDelay, pitchCorrectorDelay);
+  }
+
+  /**
+   * Schedule muting and filtering on the output timeline. During a speed switch the stretcher's
+   * delay is changing, so deriving this moment from its current delay would expose part of the
+   * accelerated transition and produce a metallic burst at both edges of a silence.
+   */
+  private _scheduleOutputProfile(speedName: SpeedName, outputBoundaryTime: AudioContextTime): void {
+    const outputProfile = speedName === SpeedName.SILENCE
+      ? this._getSilenceOutputProfile()
+      : { gain: 1, lowPassHz: NORMAL_OUTPUT_LOW_PASS_HZ };
+    const previousOutputProfile = this._lastScheduledOutputProfile;
+    const transitionDuration = speedName === SpeedName.SILENCE
+      ? OUTPUT_TRANSITION_TO_SILENCE_DURATION
+      : OUTPUT_TRANSITION_TO_SOUNDED_DURATION;
+
+    // Fade out just before acceleration begins. Fade in only after sounded audio has reached the
+    // output, so none of the high-speed recovery stretch leaks into the audible signal.
+    const transitionStartTime = speedName === SpeedName.SILENCE
+      ? Math.max(this.audioContext!.currentTime, outputBoundaryTime - transitionDuration)
+      : Math.max(this.audioContext!.currentTime, outputBoundaryTime);
+    const transitionEndTime = transitionStartTime + transitionDuration;
+
+    const scheduleTransition = (param: AudioParam, start: number, target: number) => {
+      param.cancelAndHoldAtTime(transitionStartTime);
+      // `cancelAndHoldAtTime` by itself does not create a new ramp start event. Without this
+      // explicit value the following ramp can begin at the previous event (often time zero),
+      // slowly muting the entire video instead of only the accelerated region.
+      param.setValueAtTime(start, transitionStartTime);
+      param.linearRampToValueAtTime(target, transitionEndTime);
+    };
+
+    if (this._mutingGainNode) {
+      scheduleTransition(
+        this._mutingGainNode.gain,
+        previousOutputProfile.gain,
+        outputProfile.gain
+      );
+    }
+    if (this._silenceToneFilterNode) {
+      scheduleTransition(
+        this._silenceToneFilterNode.frequency,
+        previousOutputProfile.lowPassHz,
+        outputProfile.lowPassHz
+      );
+    }
+    this._lastScheduledOutputProfile = outputProfile;
+  }
+
   /**
    * @returns elementSpeedSwitchedAt
    */
-  private _setSpeedAndLog(speedName: SpeedName): AudioContextTime {
+  private _setSpeedAndLog(speedName: SpeedName, scheduleOutputProfile = true): AudioContextTime {
     const speedVal = getActualPlaybackRateForSpeed(
       speedName === SpeedName.SOUNDED
         ? this.settings.soundedSpeed
@@ -683,38 +789,8 @@ export default class Controller {
       (this.element as any).mozPreservesPitch = speedName === SpeedName.SOUNDED;
     }
 
-    const outputProfile = speedName === SpeedName.SILENCE
-      ? this._getSilenceOutputProfile()
-      : { gain: 1, lowPassHz: NORMAL_OUTPUT_LOW_PASS_HZ };
-    const transitionDuration = speedName === SpeedName.SILENCE
-      ? OUTPUT_TRANSITION_TO_SILENCE_DURATION
-      : OUTPUT_TRANSITION_TO_SOUNDED_DURATION;
-
-    const lookaheadDelay = this._lookahead?.delayTime.value ?? 0;
-    const stretcherDelay = this._stretcherAndPitch?.stretcherDelay ?? 0;
-    const pitchCorrectorDelay = this._stretcherAndPitch?.pitchCorrectorDelay ?? 0;
-    const totalOutputDelay = getTotalOutputDelay(lookaheadDelay, stretcherDelay, pitchCorrectorDelay);
-    const effectsSchedulingTime = elementSpeedSwitchedAt + totalOutputDelay;
-
-    if (this._mutingGainNode) {
-      const targetGain = outputProfile.gain;
-      this._mutingGainNode.gain.cancelScheduledValues(effectsSchedulingTime);
-      // Use our tracked value instead of AudioParam.value, which is unreliable in
-      // Chromium when there are pending scheduled automation events.
-      this._mutingGainNode.gain.setValueAtTime(this._lastGainValue, effectsSchedulingTime);
-      this._mutingGainNode.gain.linearRampToValueAtTime(targetGain, effectsSchedulingTime + transitionDuration);
-      this._lastGainValue = targetGain;
-    }
-    if (this._silenceToneFilterNode) {
-      this._silenceToneFilterNode.frequency.cancelScheduledValues(effectsSchedulingTime);
-      this._silenceToneFilterNode.frequency.setValueAtTime(
-        this._silenceToneFilterNode.frequency.value,
-        effectsSchedulingTime
-      );
-      this._silenceToneFilterNode.frequency.linearRampToValueAtTime(
-        outputProfile.lowPassHz,
-        effectsSchedulingTime + transitionDuration
-      );
+    if (scheduleOutputProfile) {
+      this._scheduleOutputProfile(speedName, this._getOutputTimeForInputTime(elementSpeedSwitchedAt));
     }
 
     if (IS_DEV_MODE) {

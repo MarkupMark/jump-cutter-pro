@@ -20,27 +20,20 @@
 
 import type { Settings } from './';
 import { storage } from './_storage';
-import { getGeckoLikelyMaxNonMutedPlaybackRate } from '@/helpers';
-
-const legacyPopupSilenceSpeedRawMax = BUILD_DEFINITIONS.BROWSER === 'gecko'
-  ? Math.min(8, getGeckoLikelyMaxNonMutedPlaybackRate())
-  : 8;
-const popupSilenceSpeedRawMaxDefault = BUILD_DEFINITIONS.BROWSER === 'gecko'
-  ? Math.min(16, getGeckoLikelyMaxNonMutedPlaybackRate())
-  : 16;
+import { maxSilencePlaybackRate } from '@/helpers';
 
 function normalizeSettings<T extends Partial<Settings>>(settings: T): T {
   if (
-    settings.popupSilenceSpeedRawMax !== legacyPopupSilenceSpeedRawMax
-    || popupSilenceSpeedRawMaxDefault === legacyPopupSilenceSpeedRawMax
+    settings.popupSilenceSpeedRawMax === undefined
+    || settings.popupSilenceSpeedRawMax <= maxSilencePlaybackRate
   ) {
     return settings;
   }
 
-  // Keep legacy installs on the newer default slider cap without overwriting other custom values.
+  // Keep existing installs within the product's maximum silence speed.
   return {
     ...settings,
-    popupSilenceSpeedRawMax: popupSilenceSpeedRawMaxDefault,
+    popupSilenceSpeedRawMax: maxSilencePlaybackRate,
   } as T;
 }
 
