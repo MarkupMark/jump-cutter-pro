@@ -23,18 +23,36 @@ import { storage } from './_storage';
 import { maxSilencePlaybackRate } from '@/helpers';
 
 function normalizeSettings<T extends Partial<Settings>>(settings: T): T {
+  let normalized = settings;
+
   if (
-    settings.popupSilenceSpeedRawMax === undefined
-    || settings.popupSilenceSpeedRawMax <= maxSilencePlaybackRate
+    settings.popupSilenceSpeedRawMax !== undefined
+    && settings.popupSilenceSpeedRawMax > maxSilencePlaybackRate
   ) {
-    return settings;
+    normalized = {
+      ...normalized,
+      popupSilenceSpeedRawMax: maxSilencePlaybackRate,
+    };
   }
 
-  // Keep existing installs within the product's maximum silence speed.
-  return {
-    ...settings,
-    popupSilenceSpeedRawMax: maxSilencePlaybackRate,
-  } as T;
+  const chartZoomMin = settings.popupChartZoomMinSeconds;
+  const chartZoomMax = settings.popupChartZoomMaxSeconds;
+  const chartLength = settings.popupChartLengthInSeconds;
+  if (
+    chartLength !== undefined
+    && chartZoomMin !== undefined
+    && chartZoomMax !== undefined
+  ) {
+    normalized = {
+      ...normalized,
+      popupChartLengthInSeconds: Math.max(
+        Math.min(chartZoomMin, chartZoomMax),
+        Math.min(Math.max(chartZoomMin, chartZoomMax), chartLength),
+      ),
+    };
+  }
+
+  return normalized;
 }
 
 export async function getSettings<T extends keyof Settings>(keys: T[]): Promise<Pick<Settings, T>>;

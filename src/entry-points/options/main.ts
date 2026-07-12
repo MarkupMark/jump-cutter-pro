@@ -19,7 +19,13 @@
  */
 
 import App from './App.svelte';
+import { getSettings } from '@/settings';
+import { setUiLanguage } from '@/helpers/getMessage';
 
-new App({
-  target: document.body,
-});
+(async () => {
+  const { uiLanguage } = await getSettings('uiLanguage');
+  setUiLanguage(uiLanguage || 'en');
+  new App({
+    target: document.body,
+  });
+})();

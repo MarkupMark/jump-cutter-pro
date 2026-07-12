@@ -25,6 +25,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   export let label: string;
   export let fractionalDigits: number = 3;
   export let valueScale: number = 1;
+  export let valueSuffix: string = '';
   export let min: number | string | undefined = undefined;
   export let max: number | string | undefined = undefined;
   export let step: number | string | undefined = undefined;
@@ -83,7 +84,7 @@ TODO. -->
     <span
       aria-hidden="true"
       class="number-representation"
-    >{displayedValue.toFixed(fractionalDigits)}</span>
+    >{displayedValue.toFixed(fractionalDigits)}{valueSuffix}</span>
   </div>
 </label>
 

@@ -44,6 +44,9 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   } from '@/entry-points/content/TimeSavedTracker';
   import isEqual from 'lodash/isEqual';
   import { browserHasAudioDesyncBug } from '@/helpers/browserHasAudioDesyncBug';
+  import { getPopupRedesignText } from '@/helpers/popupRedesignText';
+
+  const popupRedesignText = getPopupRedesignText();
 
   let unsaved = false;
   let formValid = true;
@@ -415,7 +418,24 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
             label="⏱️ {getMessage('chartLengthInSeconds')}"
             bind:value={settings.popupChartLengthInSeconds}
             required
-            min="0"
+            min={settings.popupChartZoomMinSeconds}
+            max={settings.popupChartZoomMaxSeconds}
+          />
+          <NumberField
+            label="🔎＋ {popupRedesignText.chartZoomMinSeconds}"
+            bind:value={settings.popupChartZoomMinSeconds}
+            required
+            min="1"
+            max={settings.popupChartZoomMaxSeconds}
+            step="1"
+          />
+          <NumberField
+            label="🔎− {popupRedesignText.chartZoomMaxSeconds}"
+            bind:value={settings.popupChartZoomMaxSeconds}
+            required
+            min={settings.popupChartZoomMinSeconds}
+            max="600"
+            step="1"
           />
           <NumberField
             label="⏱️ {getMessage('chartJumpPeriod')}"

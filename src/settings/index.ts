@@ -23,12 +23,14 @@ import { ControllerKind } from './ControllerKind';
 // For JSDoc.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type TimeSavedTracker from '@/entry-points/content/TimeSavedTracker';
+import type { UiLanguage } from '@/helpers/getMessage';
 
 // It is impossible to explicitly set `experimentalControllerType` to `ControllerKind.ALWAYS_SOUNDED`.
 // See `AllMediaElementsController.ts`.
 type SettingsControllerKind = Exclude<ControllerKind, ControllerKind.ALWAYS_SOUNDED>;
 
 export interface Settings {
+  uiLanguage: UiLanguage,
   volumeThreshold: number,
   previousVolumeThreshold: number,
 
@@ -115,6 +117,10 @@ export interface Settings {
   popupChartWidthPx: number,
   popupChartHeightPx: number,
   popupChartLengthInSeconds: number,
+  /** Lower time-window bound for the compact zoom control displayed over the popup chart. */
+  popupChartZoomMinSeconds: number,
+  /** Upper time-window bound for the compact zoom control displayed over the popup chart. */
+  popupChartZoomMaxSeconds: number,
   /** Expressed as a percentage. */
   popupChartJumpPeriod: number,
   popupChartSpeed: 'realTime' | 'intrinsicTime' | 'soundedSpeedTime', // TODO add 'intrinsicTimeRelativeToSounded'

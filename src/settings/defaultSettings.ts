@@ -41,6 +41,7 @@ const ElementPlaybackControllerStretchingSpecificDefaults = {
 } as const;
 
 export const defaultSettings: Readonly<Settings> = {
+  uiLanguage: 'en',
   volumeThreshold: ElementPlaybackControllerStretchingSpecificDefaults.volumeThreshold,
   previousVolumeThreshold:  ElementPlaybackControllerStretchingSpecificDefaults.volumeThreshold,
   silenceSpeedSpecificationMethod: 'relativeToSoundedSpeed',
@@ -194,6 +195,8 @@ export const defaultSettings: Readonly<Settings> = {
   popupChartWidthPx: 400,
   popupChartHeightPx: 50,
   popupChartLengthInSeconds: 60,
+  popupChartZoomMinSeconds: 8,
+  popupChartZoomMaxSeconds: 120,
   // TODO maybe even if `popupChartSpeed === 'intrinsicTime'` the period still should be in real time?
   // At least as an option? But we're now expressing it as a fraction of chart length.
   popupChartJumpPeriod: 0,
