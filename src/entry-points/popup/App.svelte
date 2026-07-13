@@ -22,13 +22,10 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   import { onDestroy } from 'svelte';
   import {
     addOnStorageChangedListener, getSettings, setSettings, Settings, settingsChanges2NewValues,
-    ControllerKind_CLONING, ControllerKind_STRETCHING,
+    ControllerKind_STRETCHING,
     PopupAdjustableRangeInputsCapitalized,
     ControllerKind_ALWAYS_SOUNDED,
-    OppositeDayMode_ON,
-    OppositeDayMode_OFF,
-    OppositeDayMode_HIDDEN_BY_USER,
-    OppositeDayMode_UNDISCOVERED,
+    getAbsoluteClampedSilenceSpeed,
   } from '@/settings';
   import { tippyActionAsyncPreload as tippy } from './tippyAction';
   import RangeSlider from './RangeSlider.svelte';
@@ -39,23 +36,10 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     HotkeyAction_DECREASE_VOLUME_THRESHOLD,
     HotkeyAction_TOGGLE_VOLUME_THRESHOLD,
     HotkeyAction_SET_VOLUME_THRESHOLD,
-    HotkeyAction_INCREASE_SOUNDED_SPEED,
-    HotkeyAction_DECREASE_SOUNDED_SPEED,
-    HotkeyAction_TOGGLE_SOUNDED_SPEED,
-    HotkeyAction_SET_SOUNDED_SPEED,
     HotkeyAction_INCREASE_SILENCE_SPEED,
     HotkeyAction_DECREASE_SILENCE_SPEED,
     HotkeyAction_TOGGLE_SILENCE_SPEED,
     HotkeyAction_SET_SILENCE_SPEED,
-    HotkeyAction_INCREASE_MARGIN_BEFORE,
-    HotkeyAction_DECREASE_MARGIN_BEFORE,
-    HotkeyAction_TOGGLE_MARGIN_BEFORE,
-    HotkeyAction_SET_MARGIN_BEFORE,
-    HotkeyAction_INCREASE_MARGIN_AFTER,
-    HotkeyAction_DECREASE_MARGIN_AFTER,
-    HotkeyAction_TOGGLE_MARGIN_AFTER,
-    HotkeyAction_TOGGLE_MARGIN_AFTER,
-    HotkeyAction_SET_MARGIN_AFTER,
     HotkeyAction_TOGGLE_PAUSE,
     HotkeyAction_RESET_TIME_SAVED,
     HotkeyBinding,
@@ -63,10 +47,16 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   } from '@/hotkeys';
   import type createKeydownListener from './hotkeys';
   import throttle from 'lodash/throttle';
-  import { assertDev, assertNever, getMessage } from '@/helpers';
+  import { assertDev, getMessage } from '@/helpers';
   import { isMobile } from '@/helpers/isMobile';
   import type { Props as TippyProps } from 'tippy.js';
   import VolumeIndicator from './VolumeIndicator.svelte';
+  import SilenceMarginPreview from './SilenceMarginPreview.svelte';
+  import PlaybackSpeedStepper from './PlaybackSpeedStepper.svelte';
+  import { getPopupRedesignText } from '@/helpers/popupRedesignText';
+  import type { UiLanguage } from '@/helpers/getMessage';
+
+  const popupRedesignText = getPopupRedesignText();
 
   // See ./popup.css. Would be cool to do this at build-time
   if (BUILD_DEFINITIONS.BROWSER === 'chromium') {
@@ -75,7 +65,8 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
 
   type RequiredSettings =
     Pick<Settings,
-      'enabled'
+      'uiLanguage'
+      | 'enabled'
       | 'muteSilences'
       | 'transientNoiseFilterEnabled'
       | 'transientNoiseFilterMinSoundedDurationMs'
@@ -83,13 +74,12 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       | 'popupAutofocusEnabledInput'
       | 'enableHotkeys'
       | 'silenceSpeedSpecificationMethod'
-      | 'timeSavedRepresentation'
-      | 'timeSavedAveragingMethod'
-      | 'timeSavedAveragingWindowLength'
       | 'popupChartWidthPx'
       | 'popupChartHeightPx'
       | 'popupChartSpeed'
       | 'popupChartLengthInSeconds'
+      | 'popupChartZoomMinSeconds'
+      | 'popupChartZoomMaxSeconds'
       | 'popupChartJumpPeriod'
       | 'dontAttachToCrossOriginMedia'
       | 'popupAlwaysShowOpenLocalFileLink'
@@ -98,15 +88,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       | 'onPlaybackRateChangeFromOtherScripts'
       | 'hotkeys'
       | 'popupSpecificHotkeys'
-      | 'oppositeDayMode'
-
-      | 'lifetimeTimeSavedComparedToSoundedSpeed'
-      | 'lifetimeTimeSavedComparedToIntrinsicSpeed'
-      | 'lifetimeWouldHaveLastedIfSpeedWasSounded'
-      | 'lifetimeWouldHaveLastedIfSpeedWasIntrinsic'
       | 'experimentalControllerType'
-      | 'useSeparateMarginSettingsForDifferentAlgorithms'
-      | 'algorithmSpecificSettings'
     >
     & ReturnType<Parameters<typeof createKeydownListener>[1]>
     & Parameters<typeof rangeInputSettingNameToAttrs>[1];
@@ -118,6 +100,21 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     : undefined;
   const popupIsDetached = Number.isFinite(detachedTabId);
   let chartWidthPx = 400;
+  let languageMenuOpen = false;
+  const languageOptions: Array<{ value: UiLanguage, flag: string, name: string }> = [
+    { value: 'en', flag: '🇬🇧', name: 'English' },
+    { value: 'it', flag: '🇮🇹', name: 'Italiano' },
+    { value: 'fr', flag: '🇫🇷', name: 'Français' },
+    { value: 'es', flag: '🇪🇸', name: 'Español' },
+  ];
+  $: selectedLanguage = languageOptions.find(option => option.value === settings?.uiLanguage) ?? languageOptions[0];
+
+  async function selectUiLanguage(language: UiLanguage) {
+    languageMenuOpen = false;
+    if (language === settings.uiLanguage) return;
+    await setSettings({ uiLanguage: language });
+    window.location.reload();
+  }
 
   let settingsPromise = getSettings();
   settingsPromise.then(s => {
@@ -203,8 +200,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     chartWidthPx = Math.max(240, Math.floor(window.innerWidth - horizontalPadding));
   }
 
-  let resolveFirstTelemetryReceivedP: () => void;
-  const firstTelemetryReceivedP = new Promise<void>(r => resolveFirstTelemetryReceivedP = r);
   let latestTelemetryRecord: TelemetryMessage | undefined;
   const telemetryUpdatePeriod = 0.02;
   let disconnect: undefined | (() => void);
@@ -284,7 +279,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
             return;
           }
           latestTelemetryRecord = msg as TelemetryMessage;
-          resolveFirstTelemetryReceivedP();
         });
         let telemetryTimeoutId: ReturnType<typeof setTimeout>;
         (function sendGetTelemetryAndScheduleAnother() {
@@ -442,8 +436,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     };
 
   $: controllerTypeAlwaysSounded = latestTelemetryRecord?.controllerType === ControllerKind_ALWAYS_SOUNDED;
-  $: legacyCloningEnabled = settings?.experimentalControllerType === ControllerKind_CLONING;
-
   function onAdvancedModeChange(isOn: boolean) {
     settingsKeysToSaveToStorage.add('advancedMode');
     throttledSaveUnsavedSettingsToStorageAndTriggerCallbacks();
@@ -538,81 +530,13 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     });
   }
 
-  $: timeSavedDummyVal =
-    settings == undefined
-    || settings.timeSavedRepresentation === 'minutesOutOfHour'
-      ? '88.8'
-      : settings.timeSavedRepresentation === 'effectivePlaybackRate'
-      ? '8.88'
-      : settings.timeSavedRepresentation === 'percentage'
-      ? '88.8%'
-      : assertNever(settings.timeSavedRepresentation) || ''
-
-  let oppositeDayModeIsDiscoverable = false;
-  (async () => {
-    // Reveal the opposite day mode if the conditions are good.
-
-    const now = new Date();
-    const is1stOfApril = now.getDate() === 1 && now.getMonth() === 3;
-    if (!is1stOfApril) {
-      return
-    }
-
-    const settings = await settingsPromise;
-    if (settings.oppositeDayMode !== OppositeDayMode_UNDISCOVERED) {
-      // Already revealed, no need to do anything.
-      return
-    }
-    // TODO perf: dyamically import whatever is below.
-
-    await firstTelemetryReceivedP;
-    assertDev(latestTelemetryRecord);
-
-    // The opposite day mode is not as fun on the stretching controller.
-    // Only the cloning one is fun, because it entirely skips "silence".
-    if (latestTelemetryRecord.controllerType !== ControllerKind_CLONING) {
-      return;
-    }
-
-    const timeSavedData = latestTelemetryRecord.sessionTimeSaved;
-
-    // TODO fix: ahhh, this could be an exponentially decayed value,
-    // it's not correct to just look at the absolute value.
-    if (timeSavedData.wouldHaveLastedIfSpeedWasSounded < 2 * 60) {
-      // Let's not turn on the opposite day mode yet,
-      // it's too early to judge the average silence percentage
-      // of the video.
-      return
-    }
-
-    const timeSavedPercentage =
-      timeSavedData.timeSavedComparedToSoundedSpeed /
-      timeSavedData.wouldHaveLastedIfSpeedWasSounded;
-    if (timeSavedPercentage < 0.20) {
-      // If there is too little silence, we would have to skip too much,
-      // and the cloning algorithm won't be able too keep up
-      // playing the clone video. It won't be able to find the next
-      // loud part in time, so we'd have to still play some
-      // loud parts, which would ruin the effect.
-      return
-    }
-
-    const remainingDuration = latestTelemetryRecord.elementRemainingIntrinsicDuration;
-    if (Number.isNaN(remainingDuration) || remainingDuration < 5 * 60) {
-      // Less than 5 minutes left, can't have much fun.
-      return
-    }
-
-    oppositeDayModeIsDiscoverable = true;
-  })();
-
 </script>
 
 <svelte:window
   on:keydown={keydownListener}
 />
 {#await settingsPromise then _}
-  <div style="display: flex; justify-content: space-between;">
+  <div class="popup-header">
     <div
       style="
         display: flex;
@@ -658,8 +582,8 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
         text-align: right;
       "
     >
-      {#if settings.advancedMode}
-      <div style="margin-bottom: 0.375rem;">
+      <div class="header-actions">
+        {#if settings.advancedMode}
         <!-- Detach button -->
         <button
           on:click={async () => {
@@ -679,13 +603,41 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
             window.close();
           }}
           use:tippy={{
-            content: () => getMessage('detachPopup') || 'Stacca in nuova finestra',
+            content: () => getMessage('detachPopup'),
             theme: 'my-tippy',
           }}
           style="padding: 0; margin-right: 0.25rem;"
         >🗗</button>
+        {/if}
+        <div class="language-picker">
+          <button
+            class="icon-button language-button"
+            type="button"
+            aria-label={popupRedesignText.language}
+            aria-expanded={languageMenuOpen}
+            title={popupRedesignText.language}
+            on:click={() => languageMenuOpen = !languageMenuOpen}
+          >{selectedLanguage.flag}</button>
+          {#if languageMenuOpen}
+            <div class="language-menu" role="menu">
+              {#each languageOptions as option}
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={settings.uiLanguage === option.value}
+                  class:active={settings.uiLanguage === option.value}
+                  on:click={() => selectUiLanguage(option.value)}
+                >
+                  <span aria-hidden="true">{option.flag}</span>
+                  <span>{option.name}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
         <!-- TODO but this is technically a button. Is this ok? -->
         <button
+          class="icon-button"
           on:click={() => {
             browserOrChrome.runtime.openOptionsPage();
             if (isMobile) {
@@ -695,32 +647,22 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
             }
           }}
           use:tippy={{
-            content: () => getMessage('more'),
+            content: () => popupRedesignText.settings,
             theme: 'my-tippy',
           }}
-          style="padding: 0;"
+          aria-label={popupRedesignText.settings}
         >⚙️</button>
       </div>
-      {/if}
       <div style="margin-bottom: 0.375rem;">
         {#await import(
           /* webpackExports: ['default'] */
           /* webpackPreload: true */
-          './TimeSaved.svelte'
+          './TimeSavedSummary.svelte'
         )}
-          <div style="filter: blur(0.7px);">
-            <span>⏱️ {timeSavedDummyVal}</span>
-            {#if settings.soundedSpeed !== 1}
-              <span>/ {timeSavedDummyVal}</span>
-            {/if}
-            <br>
-            88:88:88.88
-          </div>
-        {:then { default: TimeSaved }}
-          <TimeSaved
+          <div style="filter: blur(0.7px);">0 {getMessage('timeSaved')}</div>
+        {:then { default: TimeSavedSummary }}
+          <TimeSavedSummary
             {latestTelemetryRecord}
-            {settings}
-            onSettingsChange={updateSettingsLocalCopyAndStorage}
             onResetTimeSaved={() => {
               nonSettingsActionsPort?.postMessage([{
                 action: HotkeyAction_RESET_TIME_SAVED,
@@ -735,6 +677,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
 
   <!-- TODO transitions? -->
   <div
+    class="chart-frame"
     style={
       `--popupChartWidth: ${chartWidthPx}px;`
       + `--popupChartHeight: ${settings.popupChartHeightPx}px;`
@@ -744,6 +687,19 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       + 'align-items: center;'
     }
   >
+  <label class="chart-zoom-control" title={popupRedesignText.chartZoom}>
+    <span aria-hidden="true">⌕</span>
+    <input
+      aria-label={popupRedesignText.chartZoom}
+      type="range"
+      min={Math.min(settings.popupChartZoomMinSeconds, settings.popupChartZoomMaxSeconds)}
+      max={Math.max(settings.popupChartZoomMinSeconds, settings.popupChartZoomMaxSeconds)}
+      step="1"
+      bind:value={settings.popupChartLengthInSeconds}
+      on:input={createOnInputListener('popupChartLengthInSeconds')}
+    >
+    <output>{Math.round(settings.popupChartLengthInSeconds)}s</output>
+  </label>
   <div
     style={
       "min-width: 100%;"
@@ -909,35 +865,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     />
   </label>
   {:else}
-  {#if (
-    // The opposite day mode only applies to the cloning controller.
-    legacyCloningEnabled
-    && (
-      settings.oppositeDayMode === OppositeDayMode_UNDISCOVERED
-        ? oppositeDayModeIsDiscoverable
-        : settings.oppositeDayMode !== OppositeDayMode_HIDDEN_BY_USER
-    )
-  )}
-    <br>
-    <label
-      style="margin-top: 1rem; display: inline-flex; align-items: center;"
-    >
-      <input
-        checked={settings.oppositeDayMode === OppositeDayMode_ON}
-        on:change={e => {
-          updateSettingsLocalCopyAndStorage({
-            oppositeDayMode: e.currentTarget.checked
-              ? OppositeDayMode_ON
-              : OppositeDayMode_OFF
-          })
-        }}
-        type="checkbox"
-        style="margin: 0 0.5rem 0 0;"
-      >
-      <!-- TODO translation -->
-      <span>🔀 Opposite day</span>
-    </label>
-  {/if}
   {#if latestTelemetryRecord?.clonePlaybackError}
     <p>
       <!-- This usually happens when the user has activated the experimental
@@ -955,8 +882,7 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       because we analyze the original element in parallel. -->
       <!-- <span>⚠️</span> -->
       <!-- <span>{getMessage('contentScriptFail')}</span><br> -->
-      <span>Reload the page to restart loudness analysis</span>
-      <!-- TODO improvement: i18n -->
+      <span>{getMessage('reloadForLoudnessAnalysis')}</span>
       <button
         type="button"
         on:click={(e) => {
@@ -972,12 +898,12 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
           thisButton.disabled = true;
           setTimeout(() => thisButton.disabled = false, 5000);
         }}
-      >🔄 Reload<!--  the page --></button>
+      >🔄 {getMessage('reloadPage')}</button>
     </p>
   {/if}
   <!-- TODO DRY `VolumeThreshold`? Like `'V' + 'olumeThreshold'`? Same for other inputs. -->
   <RangeSlider
-    label="🔉 {getMessage('volumeThreshold')} (x1000)"
+    label="🔉 {getMessage('volumeThreshold')}"
     fractionalDigits={1}
     valueScale={1000}
     {...rangeInputSettingNameToAttrs('VolumeThreshold', settings)}
@@ -1006,33 +932,24 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     settings.advancedMode
     || settings.onPlaybackRateChangeFromOtherScripts !== 'updateSoundedSpeed'
   )}
-  <datalist id="sounded-speed-datalist">
-    <option>1</option>
-  </datalist>
-  <RangeSlider
-    label="▶️ {getMessage('soundedSpeed')}"
-    list="sounded-speed-datalist"
-    fractionalDigits={2}
-    {...rangeInputSettingNameToAttrs('SoundedSpeed', settings)}
+  <section class="control-card utility-card">
+    <div class="control-card-heading">
+      <span>{getMessage('soundedSpeed')}</span>
+    </div>
+  <PlaybackSpeedStepper
     bind:value={settings.soundedSpeed}
+    min={settings.popupSoundedSpeedMin}
+    max={settings.popupSoundedSpeedMax}
+    step={settings.popupSoundedSpeedStep}
+    decreaseLabel={popupRedesignText.decreaseSpeed}
+    increaseLabel={popupRedesignText.increaseSpeed}
     on:input={createOnInputListener('soundedSpeed')}
-    useForInputParams={{
-      content: () => {
-        let tooltip = getMessage('soundedSpeedTooltip');
-        const hotkeysString = getActionString(HotkeyAction_INCREASE_SOUNDED_SPEED, getMessage("increaseSettingValue")) +
-        getActionString(HotkeyAction_DECREASE_SOUNDED_SPEED, getMessage("decreaseSettingValue")) +
-        getActionString(HotkeyAction_TOGGLE_SOUNDED_SPEED, getMessage("toggleSettingValue")) +
-        getActionString(HotkeyAction_SET_SOUNDED_SPEED, getMessage("setSettingValue"));
-
-        if (hotkeysString) {
-          tooltip += '\n' + hotkeysString;
-        }
-
-        return tooltip;
-      },
-      theme: tippyThemeMyTippyAndPreLine,
-    }}
   />
+  </section>
+  <section class="control-card jumpcut-card">
+    <div class="control-card-heading">
+      <span>{popupRedesignText.jumpCutControls}</span>
+    </div>
   <RangeSlider
     label="⏩ {getMessage('silenceSpeed')} ({silenceSpeedLabelClarification})"
     fractionalDigits={2}
@@ -1101,52 +1018,25 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     >
   </label>
   {/if}
-  <RangeSlider
-    label="⏱️⬅️ {getMessage('marginBefore')}"
-    {...rangeInputSettingNameToAttrs('MarginBefore', settings)}
-    bind:value={settings.marginBefore}
-    on:input={createOnInputListener('marginBefore')}
+  <SilenceMarginPreview
+    bind:marginBefore={settings.marginBefore}
+    bind:marginAfter={settings.marginAfter}
+    silenceSpeed={getAbsoluteClampedSilenceSpeed(settings)}
+    title={popupRedesignText.marginPreviewTitle}
+    beforeLabel={popupRedesignText.before}
+    afterLabel={popupRedesignText.after}
+    silenceLabel={popupRedesignText.detectedSilence}
     disabled={controllerTypeAlwaysSounded}
-    useForInputParams={{
-      content: () => {
-        let tooltip = getMessage('marginBeforeTooltip');
-        const hotkeysString = getActionString(HotkeyAction_INCREASE_MARGIN_BEFORE, getMessage("increaseSettingValue")) +
-        getActionString(HotkeyAction_DECREASE_MARGIN_BEFORE, getMessage("decreaseSettingValue")) +
-        getActionString(HotkeyAction_TOGGLE_MARGIN_BEFORE, getMessage('toggleSettingValue')) +
-        getActionString(HotkeyAction_SET_MARGIN_BEFORE, getMessage('setSettingValue'));
-
-        if (hotkeysString) {
-          tooltip += '\n' + hotkeysString;
-        }
-
-        return tooltip;
-      },
-      theme: tippyThemeMyTippyAndPreLine,
-    }}
+    minBefore={settings.popupMarginBeforeMin}
+    maxBefore={settings.popupMarginBeforeMax}
+    stepBefore={settings.popupMarginBeforeStep}
+    minAfter={settings.popupMarginAfterMin}
+    maxAfter={settings.popupMarginAfterMax}
+    stepAfter={settings.popupMarginAfterStep}
+    on:inputBefore={createOnInputListener('marginBefore')}
+    on:inputAfter={createOnInputListener('marginAfter')}
   />
-  <RangeSlider
-    label="⏱️➡️ {getMessage('marginAfter')}"
-    {...rangeInputSettingNameToAttrs('MarginAfter', settings)}
-    bind:value={settings.marginAfter}
-    on:input={createOnInputListener('marginAfter')}
-    disabled={controllerTypeAlwaysSounded}
-    useForInputParams={{
-      content: () => {
-        let tooltip = getMessage('marginAfterTooltip');
-        const hotkeysString = getActionString(HotkeyAction_INCREASE_MARGIN_AFTER, getMessage("increaseSettingValue")) +
-        getActionString(HotkeyAction_DECREASE_MARGIN_AFTER, getMessage("decreaseSettingValue")) +
-        getActionString(HotkeyAction_TOGGLE_MARGIN_AFTER, getMessage("toggleSettingValue")) +
-        getActionString(HotkeyAction_SET_MARGIN_AFTER, getMessage('setSettingValue'));
-
-        if (hotkeysString) {
-          tooltip += '\n' + hotkeysString;
-        }
-
-        return tooltip;
-      },
-      theme: tippyThemeMyTippyAndPreLine,
-    }}
-  />
+  </section>
   {/if}
   <div
     style="
@@ -1185,6 +1075,127 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
 {/await}
 
 <style>
+  .popup-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.15rem 0.1rem 0.55rem;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 0.3rem;
+    margin-bottom: 0.375rem;
+  }
+
+  .icon-button {
+    padding: 0;
+  }
+
+  .language-picker {
+    position: relative;
+  }
+
+  .language-button {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  .language-menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    z-index: 10;
+    display: grid;
+    gap: 0.2rem;
+    min-width: 10.5rem;
+    padding: 0.35rem;
+    border: 1px solid var(--popup-border);
+    border-radius: 0.65rem;
+    background: var(--popup-surface);
+    box-shadow: 0 8px 24px color-mix(in srgb, #000 22%, transparent);
+  }
+
+  .language-menu button {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: 0.45rem;
+    align-items: center;
+    width: 100%;
+    padding: 0.42rem 0.55rem;
+    border: 0;
+    text-align: left;
+  }
+
+  .language-menu button:hover,
+  .language-menu button.active {
+    background: color-mix(in srgb, var(--popup-accent) 14%, transparent);
+  }
+
+  .chart-zoom-control {
+    position: absolute;
+    top: 0.42rem;
+    right: 0.42rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 0.32rem;
+    width: 10.5rem;
+    padding: 0.28rem 0.45rem;
+    border: 1px solid color-mix(in srgb, var(--popup-border) 78%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--popup-surface) 88%, transparent);
+    box-shadow: 0 2px 8px color-mix(in srgb, #000 14%, transparent);
+    backdrop-filter: blur(5px);
+  }
+
+  .chart-zoom-control input {
+    width: 6.4rem;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .chart-zoom-control output {
+    min-width: 2.5rem;
+    color: var(--popup-muted);
+    text-align: right;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chart-frame {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--popup-border);
+    border-radius: 0.75rem;
+    background: var(--popup-surface-soft);
+  }
+
+  .control-card {
+    margin-top: 0.85rem;
+    padding: 0.75rem;
+    border: 1px solid var(--popup-border);
+    border-radius: 0.8rem;
+    background: var(--popup-surface);
+  }
+
+  .utility-card { border-left: 3px solid #8a94a6; }
+  .jumpcut-card { border-left: 3px solid var(--popup-accent); }
+
+  .control-card-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--popup-border);
+  }
+
+  .control-card-heading span { font-weight: 700; }
+  .control-card :global(label:first-of-type) { margin-top: 0.7rem; }
+
   body > label:not(:first-child) {
     margin-top: 1rem;
   }

@@ -20,6 +20,13 @@
 
 :root {
   --number-representation-min-width: 6ch;
+  --popup-bg: #f5f7fa;
+  --popup-surface: #ffffff;
+  --popup-surface-soft: #f8fafc;
+  --popup-text: #18212f;
+  --popup-muted: #657184;
+  --popup-border: #dce2ea;
+  --popup-accent: #4f7df3;
 }
 
 html, body {
@@ -27,7 +34,9 @@ html, body {
 }
 
 body {
-  font-family: 'Open Sans', sans-serif;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--popup-text);
+  background: var(--popup-bg);
 
   /* This is so we can set a border for the popup (see below). I'd be glad to apply it to `html`
   instead of `body`, but in Chromium there appears to be a bug – the bottom border is not displayed.
@@ -35,10 +44,34 @@ body {
   when the height of the popup is calculated - try setting `margin-top: -5px;` on html and you'll see it.
   TODO report/fix it. */
   margin: 0;
-  padding: 0.625rem;
+  padding: 0.75rem;
 }
 
+button, input, select { font: inherit; }
+
+button {
+  min-width: 1.8rem;
+  min-height: 1.8rem;
+  border: 1px solid var(--popup-border);
+  border-radius: 0.5rem;
+  color: var(--popup-text);
+  background: var(--popup-surface);
+}
+
+input[type="range"] { accent-color: var(--popup-accent); }
+a { color: var(--popup-accent); }
+
 @media (prefers-color-scheme: dark) {
+  :root {
+    --popup-bg: #10141b;
+    --popup-surface: #181e28;
+    --popup-surface-soft: #141a23;
+    --popup-text: #edf1f7;
+    --popup-muted: #9da8b8;
+    --popup-border: #2b3442;
+    --popup-accent: #7da0ff;
+  }
+
   body.better-dark-border {
     /* Otherwise (at least in Chromium) the border is not enough pronounced on dark-themed websites,
     which may get fixed later. On light-themed the default is fine though. */

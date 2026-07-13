@@ -21,20 +21,65 @@
 import type { Settings } from './';
 import { storage } from './_storage';
 import { maxSilencePlaybackRate } from '@/helpers';
+import { ControllerKind_STRETCHING } from './ControllerKind';
 
 function normalizeSettings<T extends Partial<Settings>>(settings: T): T {
-  if (
-    settings.popupSilenceSpeedRawMax === undefined
-    || settings.popupSilenceSpeedRawMax <= maxSilencePlaybackRate
-  ) {
-    return settings;
+  let normalized = settings;
+
+  const simplifiedValues: Partial<Settings> = {};
+  if (settings.applyTo !== undefined) {
+    simplifiedValues.applyTo = 'both';
+  }
+  if (settings.silenceSpeedSpecificationMethod !== undefined) {
+    simplifiedValues.silenceSpeedSpecificationMethod = 'relativeToSoundedSpeed';
+  }
+  if (settings.experimentalControllerType !== undefined) {
+    simplifiedValues.experimentalControllerType = ControllerKind_STRETCHING;
+  }
+  if (settings.useSeparateMarginSettingsForDifferentAlgorithms !== undefined) {
+    simplifiedValues.useSeparateMarginSettingsForDifferentAlgorithms = false;
+  }
+  if (settings.timeSavedAveragingMethod !== undefined) {
+    simplifiedValues.timeSavedAveragingMethod = 'all-time';
+  }
+  if (Object.keys(simplifiedValues).length > 0) {
+    normalized = { ...normalized, ...simplifiedValues };
   }
 
-  // Keep existing installs within the product's maximum silence speed.
-  return {
-    ...settings,
-    popupSilenceSpeedRawMax: maxSilencePlaybackRate,
-  } as T;
+  const silenceSpeedValues: Partial<Settings> = {};
+  for (const key of [
+    'silenceSpeedRaw',
+    'previousSilenceSpeedRaw',
+    'popupSilenceSpeedRawMin',
+    'popupSilenceSpeedRawMax',
+  ] as const) {
+    const value = settings[key];
+    if (value !== undefined && value > maxSilencePlaybackRate) {
+      silenceSpeedValues[key] = maxSilencePlaybackRate;
+    }
+  }
+  if (Object.keys(silenceSpeedValues).length > 0) {
+    normalized = { ...normalized, ...silenceSpeedValues };
+  }
+
+  const chartZoomMin = settings.popupChartZoomMinSeconds;
+  const chartZoomMax = settings.popupChartZoomMaxSeconds;
+  const chartLength = settings.popupChartLengthInSeconds;
+  if (
+    chartLength !== undefined
+    && chartZoomMin !== undefined
+    && chartZoomMax !== undefined
+  ) {
+    normalized = {
+      ...normalized,
+      popupChartLengthInSeconds: Math.max(
+        Math.min(chartZoomMin, chartZoomMax),
+        Math.min(Math.max(chartZoomMin, chartZoomMax), chartLength),
+      ),
+    };
+  }
+
+  return normalized;
 }
 
 export async function getSettings<T extends keyof Settings>(keys: T[]): Promise<Pick<Settings, T>>;
