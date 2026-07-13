@@ -202,7 +202,7 @@
   .margin-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0;
+    gap: 14px;
     width: 92%;
     margin: 0.25rem auto 0;
   }

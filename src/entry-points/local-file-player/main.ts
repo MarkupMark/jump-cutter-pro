@@ -18,8 +18,15 @@
  * along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import App from './App.svelte';
+import { getSettings } from '@/settings';
+import { setUiLanguage } from '@/helpers/getMessage';
 
-new App({
-  target: document.body,
-});
+(async () => {
+  const { uiLanguage } = await getSettings('uiLanguage');
+  setUiLanguage(uiLanguage || 'en');
+  document.documentElement.lang = uiLanguage || 'en';
+  const App = (await import('./App.svelte')).default;
+  new App({
+    target: document.body,
+  });
+})();

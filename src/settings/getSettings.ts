@@ -21,18 +21,45 @@
 import type { Settings } from './';
 import { storage } from './_storage';
 import { maxSilencePlaybackRate } from '@/helpers';
+import { ControllerKind_STRETCHING } from './ControllerKind';
 
 function normalizeSettings<T extends Partial<Settings>>(settings: T): T {
   let normalized = settings;
 
-  if (
-    settings.popupSilenceSpeedRawMax !== undefined
-    && settings.popupSilenceSpeedRawMax > maxSilencePlaybackRate
-  ) {
-    normalized = {
-      ...normalized,
-      popupSilenceSpeedRawMax: maxSilencePlaybackRate,
-    };
+  const simplifiedValues: Partial<Settings> = {};
+  if (settings.applyTo !== undefined) {
+    simplifiedValues.applyTo = 'both';
+  }
+  if (settings.silenceSpeedSpecificationMethod !== undefined) {
+    simplifiedValues.silenceSpeedSpecificationMethod = 'relativeToSoundedSpeed';
+  }
+  if (settings.experimentalControllerType !== undefined) {
+    simplifiedValues.experimentalControllerType = ControllerKind_STRETCHING;
+  }
+  if (settings.useSeparateMarginSettingsForDifferentAlgorithms !== undefined) {
+    simplifiedValues.useSeparateMarginSettingsForDifferentAlgorithms = false;
+  }
+  if (settings.timeSavedAveragingMethod !== undefined) {
+    simplifiedValues.timeSavedAveragingMethod = 'all-time';
+  }
+  if (Object.keys(simplifiedValues).length > 0) {
+    normalized = { ...normalized, ...simplifiedValues };
+  }
+
+  const silenceSpeedValues: Partial<Settings> = {};
+  for (const key of [
+    'silenceSpeedRaw',
+    'previousSilenceSpeedRaw',
+    'popupSilenceSpeedRawMin',
+    'popupSilenceSpeedRawMax',
+  ] as const) {
+    const value = settings[key];
+    if (value !== undefined && value > maxSilencePlaybackRate) {
+      silenceSpeedValues[key] = maxSilencePlaybackRate;
+    }
+  }
+  if (Object.keys(silenceSpeedValues).length > 0) {
+    normalized = { ...normalized, ...silenceSpeedValues };
   }
 
   const chartZoomMin = settings.popupChartZoomMinSeconds;

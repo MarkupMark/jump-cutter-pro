@@ -24,29 +24,21 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   import CheckboxField from './components/CheckboxField.svelte';
   import NumberField from './components/NumberField.svelte';
   import InputFieldBase from './components/InputFieldBase.svelte';
-  import { cloneDeepJson, assertDev, assertNever, getMessage } from '@/helpers';
+  import { cloneDeepJson, assertDev, assertNever, getMessage, maxSilencePlaybackRate } from '@/helpers';
   import {
-    changeAlgorithmAndMaybeRelatedSettings,
-    ControllerKind_CLONING,
-    ControllerKind_STRETCHING,
     defaultSettings,
     filterOutLocalStorageOnlySettings,
     getSettings,
-    OppositeDayMode_HIDDEN_BY_USER,
-    OppositeDayMode_OFF,
-    OppositeDayMode_UNDISCOVERED,
     setSettings,
     Settings,
   } from "@/settings";
   import debounce from 'lodash/debounce';
-  import {
-    getDecayTimeConstant as getTimeSavedDataWeightDecayTimeConstant
-  } from '@/entry-points/content/TimeSavedTracker';
   import isEqual from 'lodash/isEqual';
   import { browserHasAudioDesyncBug } from '@/helpers/browserHasAudioDesyncBug';
   import { getPopupRedesignText } from '@/helpers/popupRedesignText';
 
   const popupRedesignText = getPopupRedesignText();
+  const githubSponsorsUrl = 'https://github.com/sponsors/MarkupMark';
 
   let unsaved = false;
   let formValid = true;
@@ -97,16 +89,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   }
   const debouncedSaveSettings = debounce(saveSettings, 50);
 
-  function onUseExperimentalAlgorithmChange(checked: boolean) {
-    const newControllerType = checked
-      ? ControllerKind_CLONING
-      : ControllerKind_STRETCHING;
-    settings = {
-      ...settings,
-      ...changeAlgorithmAndMaybeRelatedSettings(settings, newControllerType),
-    };
-  }
-
   function onResetToDefaultsClick() {
     // TODO looks like `confirm()` doesn't work. Let's create our own `<dialog>`?
     settings = cloneDeepJson(defaultSettings); // This will trigger the `onSettingsChanged` listener.
@@ -141,17 +123,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     }
   });
 
-  const onPlaybackRateChangeFromOtherScriptsOptions:
-    Array<{ v: Settings['onPlaybackRateChangeFromOtherScripts'], l: string }>
-    = [
-      { v: 'updateSoundedSpeed', l: `= ${getMessage('updateSoundedSpeedWheneverItChangesOnWebsite')}` },
-      { v: 'prevent', l: `✋ ${getMessage('preventOtherScriptsFromChangingPlaybackRate')}` },
-      { v: 'doNothing', l: `🧘 ${getMessage('doNothingWheneverPlaybackRateChanges')}` },
-    ];
-  const silenceSpeedSpecificationMethodOptions: Array<{ v: Settings['silenceSpeedSpecificationMethod'], l: string }> = [
-    { v: 'relativeToSoundedSpeed', l: `✖️ ${getMessage('relativeToSounded')}` },
-    { v: 'absolute', l: `= ${getMessage('absolute')}${getMessage('absoluteSilenceSpeedClarification')}` },
-  ]
   const badgeWhatSettingToDisplayByDefaultOptions: Array<{ v: Settings['badgeWhatSettingToDisplayByDefault'], l: string }> = [
     { v: 'none', l: `❌ ${getMessage('none')}`, },
     { v: 'timeSaved', l: `⏱️🧮 ${getMessage('timeSaved')}`, },
@@ -159,10 +130,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     { v: 'silenceSpeedRaw', l: `🙊⏩ ${getMessage('silenceSpeed')}`, },
     { v: 'volumeThreshold', l: `🔉🎚️ ${getMessage('volumeThreshold')}`, },
   ]
-  const timeSavedAveragingMethodOptions: Array<{ v: Settings['timeSavedAveragingMethod'], l : string }> = [
-    { v: 'all-time', l: `♾️ ${getMessage('timeSavedAveragingMethodAllTime')}` },
-    { v: 'exponential', l: `📉 ${getMessage('timeSavedAveragingMethodExponential')}`, },
-  ];
   const popupChartSpeedOptions: Array<{ v: Settings['popupChartSpeed'], l: string }> = [
     { v: 'intrinsicTime', l: `▶️= ${getMessage('chartSpeedIntrinsicTime')}` },
     { v: 'soundedSpeedTime', l: `▶️➗ ${getMessage('chartSpeedSoundedSpeedTime')}` },
@@ -204,10 +171,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
     browserOrChrome.storage.sync.clear();
     browserOrChrome.storage.sync.set(filterOutLocalStorageOnlySettings(settings));
   }
-
-  const snowflakeExtensionUrl = BUILD_DEFINITIONS.BROWSER === 'gecko'
-    ? 'https://addons.mozilla.org/firefox/addon/torproject-snowflake/'
-    : 'https://chrome.google.com/webstore/detail/snowflake/mafpmfcccpbjnhfhjnllmmalhifmlcie';
 
   let contactEmailHref: string | null = BUILD_DEFINITIONS.CONTACT_EMAIL
     ? `mailto:${BUILD_DEFINITIONS.CONTACT_EMAIL}`
@@ -263,59 +226,25 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       on:submit|preventDefault={saveSettings}
     >
       <section>
-        <h3>{getMessage('general')}</h3>
-        <fieldset>
-          <legend>▶️👀 {getMessage('wheneverPlaybackRateChangesFromOtherScripts')}</legend>
-          {#each onPlaybackRateChangeFromOtherScriptsOptions as { v, l }}
-            <input
-              type="radio"
-              name="onPlaybackRateChangeFromOtherScripts"
-              value={v}
-              bind:group={settings.onPlaybackRateChangeFromOtherScripts}
-              id={`onPlaybackRateChangeFromOtherScripts-radio-${v}`}
-            />
-            <label
-              for={`onPlaybackRateChangeFromOtherScripts-radio-${v}`}
-            >{l}</label>
-            <br>
-          {/each}
-        </fieldset>
-        <InputFieldBase
-          label="{getMessage('applyTo')}"
-          let:id
-        >
-          <select
-            {id}
-            bind:value={settings.applyTo}
-            required
-          >
-            {#each [
-              { v: 'videoOnly', l: `🎥 ${getMessage('applyToOnly', getMessage('video'))}` },
-              { v: 'audioOnly', l: `🔉 ${getMessage('applyToOnly', getMessage('audio'))}` },
-              { v: 'both', l: `🎥&🔉 ${getMessage('applyToBoth')}` },
-            ] as { v, l }}
-              <option value={v}>{l}</option>
-            {/each}
-          </select>
-        </InputFieldBase>
+        <h3>{getMessage('interactionsWithOtherScripts')}</h3>
+        <CheckboxField
+          label="🔗 {getMessage('allowOtherExtensionsPlaybackControl')}"
+          checked={settings.onPlaybackRateChangeFromOtherScripts === 'updateSoundedSpeed'}
+          on:change={e => {
+            assertDev(e.currentTarget instanceof HTMLInputElement);
+            settings.onPlaybackRateChangeFromOtherScripts = e.currentTarget.checked
+              ? 'updateSoundedSpeed'
+              : 'prevent';
+            settings = settings;
+          }}
+        />
+      </section>
+      <section>
+        <h3>{getMessage('playbackBehavior')}</h3>
         <CheckboxField
           label="🔇❌ {getMessage('omitMutedElements')}"
           bind:checked={settings.omitMutedElements}
         />
-        <InputFieldBase
-          label="🙊= {getMessage('silenceSpeedSpecificationMethod')}"
-          let:id
-        >
-          <select
-            {id}
-            bind:value={settings.silenceSpeedSpecificationMethod}
-            required
-          >
-            {#each silenceSpeedSpecificationMethodOptions as { v, l }}
-              <option value={v}>{l}</option>
-            {/each}
-          </select>
-        </InputFieldBase>
         {#if browserHasAudioDesyncBug}
           <!-- When `browserHasAudioDesyncBug === false`, the value
           of this setting has no effect, so there is no point in showing it -->
@@ -324,29 +253,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
             bind:checked={settings.enableDesyncCorrection}
           />
         {/if}
-        <!-- The English `useSeparateMarginSettingsForDifferentAlgorithms`
-        no longer uses `marginBefore` and `marginAfter` substitutions,
-        but some languages still do, so we need to keep all 3 substitutions
-        until that changes. -->
-        <CheckboxField
-          label="🔄 {getMessage('useSeparateMarginSettingsForDifferentAlgorithms', [
-            getMessage('marginBefore'),
-            getMessage('marginAfter'),
-            getMessage('useExperimentalAlgorithm'),
-          ])}"
-          bind:checked={settings.useSeparateMarginSettingsForDifferentAlgorithms}
-        />
-        <CheckboxField
-          label="🕰️ {getMessage('useExperimentalAlgorithm')}"
-          checked={settings.experimentalControllerType === ControllerKind_CLONING}
-          on:change={e => {
-            assertDev(e.currentTarget instanceof HTMLInputElement);
-            onUseExperimentalAlgorithmChange(e.currentTarget.checked);
-          }}
-        />
-        <p class="legacy-controller-note">
-          Stretching is the recommended algorithm. Cloning remains available only for legacy compatibility.
-        </p>
       </section>
       <section>
         <h3>{getMessage('hotkeys')}</h3>
@@ -361,13 +267,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
         settings). This would require us to provide inputs with names though.
         https://developer.mozilla.org/en-US/docs/Web/API/FormData/Using_FormData_Objects#Retrieving_a_FormData_object_from_an_HTML_form. -->
         <div style={settings.enableHotkeys ? '' : 'opacity: 0.5;'}>
-          <ul>
-            <!-- TODO do we need "Hotkeys are also active when the popup is open" here (see localization)?
-            Maybe it can be understood from inputs' labels? -->
-            {#each getMessage('hotkeysNotes', getMessage('switch')).split('\n') as line}
-              <li>{line}</li>
-            {/each}
-          </ul>
           <HotkeysTable
             bind:hotkeys={settings.hotkeys}
             displayOverrideWebsiteHotkeysColumn={true}
@@ -499,6 +398,12 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
                           type="number"
                           step="any"
                           min={attr === 'Step' ? Number.MIN_VALUE : ''}
+                          max={
+                            rangeInputSettingNameCapitalized.v === 'SilenceSpeedRaw'
+                            && attr !== 'Step'
+                              ? maxSilencePlaybackRate
+                              : ''
+                          }
                           bind:value={settings[`popup${rangeInputSettingNameCapitalized.v}${attr}`]}
                         />
                       </td>
@@ -520,22 +425,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
           label="☑️ {getMessage('autofocusEnabledInput', getMessage('enable'))}"
           bind:checked={settings.popupAutofocusEnabledInput}
         />
-        {#if settings.oppositeDayMode !== OppositeDayMode_UNDISCOVERED}
-          <!-- TODO translate -->
-          <CheckboxField
-            label='🔀 Show the "Opposite day" checkbox'
-            checked={settings.oppositeDayMode !== OppositeDayMode_HIDDEN_BY_USER}
-            on:change={e => {
-              assertDev(e.currentTarget instanceof HTMLInputElement);
-
-              if (e.currentTarget.checked) {
-                settings.oppositeDayMode = OppositeDayMode_OFF;
-              } else {
-                settings.oppositeDayMode = OppositeDayMode_HIDDEN_BY_USER;
-              }
-            }}
-          />
-        {/if}
         <CheckboxField
           label="🔗 {getMessage('alwaysShowOpenLocalFileLink', getMessage('openLocalFile'))}"
           bind:checked={settings.popupAlwaysShowOpenLocalFileLink}
@@ -548,55 +437,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
             style="margin: 0.75rem 0;"
           />
         </section>
-      </section>
-      <section>
-        <h3>{getMessage('timeSaved')}</h3>
-        <InputFieldBase
-          label="⏱️🧮 {getMessage('timeSavedAveragingMethod')}"
-          let:id
-        >
-          <select
-            {id}
-            bind:value={settings.timeSavedAveragingMethod}
-          >
-            {#each timeSavedAveragingMethodOptions as { v, l }}
-              <option value={v}>{l}</option>
-            {/each}
-          </select>
-        </InputFieldBase>
-        {#if settings.timeSavedAveragingMethod === 'exponential'}
-          <NumberField
-            label="⏱️✂️ {getMessage('timeSavedAveragingWindowLength')}"
-            bind:value={settings.timeSavedAveragingWindowLength}
-            required
-            min="1e-3"
-          />
-          <!-- TODO this is a pretty advanced setting. Hide it? -->
-          <!-- Allowing 0 and 1 because they're technically valid (but not sound though). TODO? -->
-          <!-- TODO represent it in percents. -->
-          <NumberField
-            label="⏱️✂️⚖️ {getMessage('timeSavedExponentialAveragingLatestDataWeight')}"
-            bind:value={settings.timeSavedExponentialAveragingLatestDataWeight}
-            required
-            min="1e-9"
-            max={1 - 1e-9}
-          />
-          <!-- TODO hh:mm:ss? -->
-          <!-- The math behind this can be found in
-          https://github.com/WofWca/jumpcutter-my-notes/blob/11fc94d4854286242b23ad790e8a232505694f53/Time%20Saved%20paper/Time%20saved.pdf
-          (Weight half-life section)-->
-          <p>
-            <output>{
-              getMessage(
-                'timeSavedDataWeightDecayTimeConstant',
-                (getTimeSavedDataWeightDecayTimeConstant(
-                  settings.timeSavedExponentialAveragingLatestDataWeight,
-                  settings.timeSavedAveragingWindowLength
-                ) * Math.LN2).toPrecision(5)
-              )
-            }</output>
-          </p>
-        {/if}
       </section>
       <section>
         <h3>{getMessage('iconBadge')}</h3>
@@ -667,38 +507,6 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
       >📧 {getMessage('contact')}</a>
     </div>
   {/if}
-  <div style="margin: 1rem 0;">
-    <a
-      target="_blank"
-      href="https://matrix.to/#/#jump-cutter-extension:matrix.org"
-      rel="extenral noopener noreferrer"
-    >💬 {getMessage('chat')}</a>
-  </div>
-  <div style="margin: 1rem 0;">
-    <a
-      target="_blank"
-      href="https://hosted.weblate.org/engage/jump-cutter/"
-      rel="extenral noopener noreferrer"
-    >🌐 {getMessage('helpTranslate')}</a>
-  </div>
-  <div style="margin: 1rem 0;">
-    <a
-      target="_blank"
-      href="https://antiwarcommittee.info/en/sunrise/#help"
-      rel="extenral noopener noreferrer"
-    >💸 {getMessage('donate')}</a>
-  </div>
-  <!-- Maybe it makes sense to hide the link in places where Tor is censored, but we don't have a good way
-  to detect it. `i18n.getUILanguage()` is an option, but there may be people speaking the country's language
-  but living somewhere else (e.g. immigrants), and they're expected to be more eager to follow such advice. -->
-  <div style="margin: 1rem 0;">
-    <!-- 🤝🌐💕🧅🖇🦮 -->
-    <a
-      target="_blank"
-      href={snowflakeExtensionUrl}
-      rel="extenral noopener noreferrer"
-    >🤝 {getMessage('runSnowflakeBridge')}</a>
-  </div>
   <!-- TODO make all this look better. What is this? "about" AND "license"? -->
   <div style="margin: 1rem 0;">
     <a
@@ -709,9 +517,16 @@ along with Jump Cutter Browser Extension.  If not, see <https://www.gnu.org/lice
   <div style="margin: 1rem 0;">
     <a
       target="_blank"
-      href="https://github.com/WofWca/jumpcutter"
+      href="https://github.com/MarkupMark/jump-cutter-pro"
       rel="extenral noopener noreferrer"
     >ℹ️ {getMessage('about')}</a>
+  </div>
+  <div style="margin: 1rem 0;">
+    <a
+      target="_blank"
+      href={githubSponsorsUrl}
+      rel="noopener noreferrer"
+    >💛 {getMessage('supportMe')}</a>
   </div>
 </main>
 <footer>
@@ -755,8 +570,15 @@ However, in Gecko the whole page is stretched, so the scroll is outside of the d
 <style>
 :global(body) {
   margin: 0;
+  font-size: calc(1rem + 3px);
   --main-padding: 1rem;
   --content-max-width: 48rem;
+}
+:global(button),
+:global(input:not([type='checkbox']):not([type='range'])),
+:global(select),
+:global(textarea) {
+  font-size: inherit;
 }
 main {
   padding: 0 var(--main-padding);
@@ -787,12 +609,6 @@ section {
 }
 h1, h2, h3, h4, h5, h6 {
   margin: 0.625rem 0;
-}
-.legacy-controller-note {
-  margin: -0.1rem 0 0.9rem;
-  padding: 0 0.5rem;
-  font-size: 0.92rem;
-  opacity: 0.85;
 }
 .status-bar {
   /* `sticky` sounds tempting, but on mobile it behaves weird,

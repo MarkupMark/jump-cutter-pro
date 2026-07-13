@@ -64,14 +64,13 @@ const NORMAL_OUTPUT_LOW_PASS_HZ = 20_000;
 const MIN_SILENCE_OUTPUT_LOW_PASS_HZ = 900;
 const SILENCE_OUTPUT_GAIN_FLOOR = 0;
 // Chromium's old playback-rate desync was fixed for normal speeds, but repeatedly switching to
-// unusually high rates (the extension now supports up to 16x) can still make decoded audio run
+// unusually high rates (the extension supports up to 8x) can still make decoded audio run
 // ahead of video. A tiny seek flushes/reanchors the media pipeline, just like a manual seek does.
 const HIGH_SPEED_DESYNC_CORRECTION_MIN_RATE = 4;
 const DESYNC_CORRECTION_SEEK_BACK_SECONDS = 1e-6;
 const MIN_TIME_BETWEEN_DESYNC_CORRECTIONS = 5;
 
 function getHighSpeedDesyncCorrectionInterval(silenceSpeed: number): number {
-  if (silenceSpeed >= 12) return 3;
   if (silenceSpeed >= 8) return 5;
   return 10;
 }
@@ -506,7 +505,7 @@ export default class Controller {
             // https://issues.chromium.org/issues/40190553
             // (or https://github.com/vantezzen/skip-silence/issues/28).
             // Idea: https://github.com/vantezzen/skip-silence/issues/28#issuecomment-714317921
-            // The original bug was fixed in Chromium 128, but the extension's newer 4x-16x
+            // The original bug was fixed in Chromium 128, but the extension's 4x-8x
             // playback rates can still accumulate the same observable drift. At those rates the
             // correction is automatic even when the legacy setting is off.
             //

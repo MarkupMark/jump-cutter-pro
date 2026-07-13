@@ -552,13 +552,30 @@ export default class AllMediaElementsController {
     const timeSavedTrackerPromise = (async () => {
       const TimeSavedTracker = (await TimeSavedTrackerPromise).default
       await controllerP; // It doesn't make sense to measure its effectiveness if it hasn't actually started working yet.
+
+      const addOnSessionSettingsChangedListener: ConstructorParameters<
+        typeof TimeSavedTracker
+      >[2] = (listener) => addOnStorageChangedListener((changes) => {
+        const sessionChanges = { ...changes };
+        // The popup now displays the cumulative time saved for the current
+        // media item, so this tracker must never switch to a decaying average.
+        delete sessionChanges.timeSavedAveragingMethod;
+        listener(sessionChanges);
+      });
       const timeSavedTracker = this.timeSavedTracker = new TimeSavedTracker(
         el,
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        this.settings!,
-        addOnStorageChangedListener,
+        {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          ...this.settings!,
+          timeSavedAveragingMethod: 'all-time',
+        },
+        addOnSessionSettingsChangedListener,
       );
       onDetach(() => timeSavedTracker.destroy());
+
+      const resetForNewMediaSource = () => timeSavedTracker.reset();
+      el.addEventListener('loadstart', resetForNewMediaSource, { passive: true });
+      onDetach(() => el.removeEventListener('loadstart', resetForNewMediaSource));
 
       onSilenceSkippingSeek1 =
         timeSavedTracker.onSilenceSkippingSeek.bind(timeSavedTracker);

@@ -73,7 +73,7 @@ export const defaultSettings: Readonly<Settings> = {
   previousMarginAfter:  ElementPlaybackControllerStretchingSpecificDefaults.marginAfter,
 
   experimentalControllerType: ControllerKind.STRETCHING,
-  useSeparateMarginSettingsForDifferentAlgorithms: true,
+  useSeparateMarginSettingsForDifferentAlgorithms: false,
   algorithmSpecificSettings: {
     [ControllerKind.CLONING]: {
       volumeThreshold: 0.010,
@@ -85,7 +85,7 @@ export const defaultSettings: Readonly<Settings> = {
     },
   },
 
-  applyTo: 'videoOnly',
+  applyTo: 'both',
 
   omitMutedElements: true,
 
@@ -263,7 +263,7 @@ export const defaultSettings: Readonly<Settings> = {
   // to get a meaningful value.
   timeSavedRepresentation: 'minutesOutOfHour',
 
-  timeSavedAveragingMethod: 'exponential',
+  timeSavedAveragingMethod: 'all-time',
   timeSavedAveragingWindowLength: 900,
   timeSavedExponentialAveragingLatestDataWeight: 0.95,
 

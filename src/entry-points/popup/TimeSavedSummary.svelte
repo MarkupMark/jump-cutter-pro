@@ -1,29 +1,35 @@
 <script lang="ts">
   import type { TelemetryMessage } from '@/entry-points/content/AllMediaElementsController';
   import { getMessage, getUiLanguage, UiLanguage } from '@/helpers/getMessage';
-  import type { Settings } from '@/settings';
   import { tippyActionAsyncPreload as tippy } from './tippyAction';
 
-  export let latestTelemetryRecord: Pick<TelemetryMessage, 'lifetimeTimeSaved'> | undefined;
-  export let settings: Pick<Settings, 'lifetimeTimeSavedComparedToSoundedSpeed'>;
+  export let latestTelemetryRecord: Pick<TelemetryMessage, 'sessionTimeSaved'> | undefined;
   export let onResetTimeSaved: () => void;
 
   const labels: Record<UiLanguage, {
+    second: string,
+    seconds: string,
     minute: string,
     minutes: string,
     hour: string,
     hours: string,
   }> = {
-    en: { minute: 'minute saved', minutes: 'minutes saved', hour: 'hour saved', hours: 'hours saved' },
-    it: { minute: 'minuto risparmiato', minutes: 'minuti risparmiati', hour: 'ora risparmiata', hours: 'ore risparmiate' },
-    fr: { minute: 'minute économisée', minutes: 'minutes économisées', hour: 'heure économisée', hours: 'heures économisées' },
-    es: { minute: 'minuto ahorrado', minutes: 'minutos ahorrados', hour: 'hora ahorrada', hours: 'horas ahorradas' },
+    en: { second: 'second saved', seconds: 'seconds saved', minute: 'minute saved', minutes: 'minutes saved', hour: 'hour saved', hours: 'hours saved' },
+    it: { second: 'secondo risparmiato', seconds: 'secondi risparmiati', minute: 'minuto risparmiato', minutes: 'minuti risparmiati', hour: 'ora risparmiata', hours: 'ore risparmiate' },
+    fr: { second: 'seconde économisée', seconds: 'secondes économisées', minute: 'minute économisée', minutes: 'minutes économisées', hour: 'heure économisée', hours: 'heures économisées' },
+    es: { second: 'segundo ahorrado', seconds: 'segundos ahorrados', minute: 'minuto ahorrado', minutes: 'minutos ahorrados', hour: 'hora ahorrada', hours: 'horas ahorradas' },
   };
   const locales: Record<UiLanguage, string> = { en: 'en-GB', it: 'it-IT', fr: 'fr-FR', es: 'es-ES' };
   const language = getUiLanguage();
   const numberFormatter = new Intl.NumberFormat(locales[language], { maximumFractionDigits: 1 });
 
   function formatSavedTime(seconds: number) {
+    if (seconds < 100) {
+      const roundedSeconds = Math.round(seconds);
+      const unit = roundedSeconds === 1 ? labels[language].second : labels[language].seconds;
+      return `${numberFormatter.format(roundedSeconds)} ${unit}`;
+    }
+
     const useHours = seconds >= 60 * 60;
     const value = useHours ? seconds / (60 * 60) : seconds / 60;
     const rounded = Math.round(value * 10) / 10;
@@ -35,8 +41,7 @@
 
   $: savedSeconds = Math.max(
     0,
-    latestTelemetryRecord?.lifetimeTimeSaved.timeSavedComparedToSoundedSpeed
-      ?? settings.lifetimeTimeSavedComparedToSoundedSpeed,
+    latestTelemetryRecord?.sessionTimeSaved.timeSavedComparedToSoundedSpeed ?? 0,
   );
   $: summary = formatSavedTime(savedSeconds);
 </script>
@@ -46,7 +51,7 @@
     class="value"
     type="button"
     use:tippy={{
-      content: () => getMessage('timeSavedSinceInstallation'),
+      content: () => getMessage('timeSavedCurrentVideo'),
       theme: 'my-tippy',
       placement: 'bottom',
     }}

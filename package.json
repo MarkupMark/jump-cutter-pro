@@ -1,17 +1,17 @@
 {
-  "name": "jump-cutter",
+  "name": "jump-cutter-pro",
   "author": {
     "name": "WofWca",
     "email": "wofwca@protonmail.com"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/WofWca/jumpcutter.git"
+    "url": "git+https://github.com/MarkupMark/jump-cutter-pro.git"
   },
   "bugs": {
-    "url": "https://github.com/WofWca/jumpcutter/issues"
+    "url": "https://github.com/MarkupMark/jump-cutter-pro/issues"
   },
-  "homepage": "https://github.com/WofWca/jumpcutter#readme",
+  "homepage": "https://github.com/MarkupMark/jump-cutter-pro#readme",
   "scripts": {
     "_abstract-build": "npm run lint && NODE_ENV=production webpack --mode=production",
     "build:gecko": "npm run _abstract-build -- --env browser=gecko --env noreport",

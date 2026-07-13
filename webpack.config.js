@@ -47,7 +47,7 @@ module.exports = env => {
       JSON.stringify(env.browser !== 'chromium'),
 
     'BUILD_DEFINITIONS.CONTACT_EMAIL':
-      JSON.stringify('wofwca@protonmail.com'),
+      JSON.stringify('Marcoagnese2004@gmail.com'),
   });
 
   return {
