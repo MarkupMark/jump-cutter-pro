@@ -159,7 +159,7 @@
 		"message": "Restablecer a la configuración predeterminada"
 	},
 	"extensionDescription": {
-		"message": "Vea vídeos hasta dos veces más rápido saltándose automáticamente las pausas largas entre frases"
+		"message": "Acelera hasta 8× las secciones silenciosas de vídeos y audio, manteniendo clara la voz"
 	},
 	"timeSavedComparedToSounded": {
 		"message": "En promedio, cuánto más rápido se reproduce efectivamente el video, en comparación con la velocidad del sonido"
@@ -364,7 +364,7 @@
 		"message": "Atributos del control deslizante de rango"
 	},
 	"rangeSlidersAttributesNote": {
-		"message": "Tenga en cuenta que los navegadores no admiten velocidades de reproducción por encima de ciertos límites.\nCuando se probó este complemento, el navegador basado en Chromium (como Chrome, Edge) era 16 y el navegador basado en Gecko (Firefox) era 8 de forma predeterminada."
+		"message": "La extensión limita la reproducción durante los silencios a un máximo de 8×. Configura los valores mínimo y máximo y el incremento de los controles de la ventana."
 	},
 	"alwaysShowOpenLocalFileLink": {
 		"message": "Mostrar el enlace \"$openLocalFileLabel$\"",

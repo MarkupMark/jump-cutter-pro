@@ -1,6 +1,6 @@
 {
 	"extensionDescription": {
-		"message": "Skips silence in videos: watch them up to 2x faster"
+		"message": "Speeds up silent sections in videos and audio up to 8×, while keeping speech clear"
 	},
 	"enable": {
 		"message": "Enable"
@@ -379,7 +379,7 @@
 		"message": "Range sliders' attributes"
 	},
 	"rangeSlidersAttributesNote": {
-		"message": "Be aware that browsers do not support playback rates above a certain limit.\nAt the time of writing it's 16 for Chromium (Chrome, Edge) and 8 (by default) for Gecko (Firefox)."
+		"message": "The extension limits silence playback to a maximum of 8×. Configure the minimum, maximum, and step used by the popup sliders."
 	},
 	"min": {
 		"message": "Min"

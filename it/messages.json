@@ -1,23 +1,177 @@
 {
-  "muteSilences": {
-    "message": "Azzera volume durante i silenzi"
+  "extensionDescription": { "message": "Velocizza fino a 8× le sezioni silenziose di video e audio, mantenendo chiaro il parlato" },
+  "enable": { "message": "Abilita" },
+  "toggleExtension": { "message": "Attiva o disattiva l’estensione" },
+  "skipLess": { "message": "Velocizza meno" },
+  "skipMore": { "message": "Velocizza di più" },
+  "popupAdvancedMode": { "message": "Impostazioni avanzate" },
+  "more": { "message": "Altro" },
+  "volume": { "message": "Volume\nNon indica il livello sonoro corrente, ma il moltiplicatore di amplificazione, come su un televisore" },
+  "timeSaved": { "message": "Tempo risparmiato" },
+  "timeSavedSinceInstallation": { "message": "Tempo totale risparmiato dall’installazione" },
+  "overTheLast": {
+    "message": "Negli ultimi $duration$",
+    "placeholders": { "duration": { "content": "$1", "example": "15:00" } }
   },
-  "transientNoiseFilterEnabled": {
-    "message": "Filtro rumori transitori"
+  "numbersMeanings": { "message": "Significato dei valori, in ordine:" },
+  "timeSavedSavingMinutesOutOfEveryHour": { "message": "Minuti risparmiati per ogni ora di contenuto" },
+  "timeSavedComparedToSounded": { "message": "Velocità media effettiva rispetto alla velocità di riproduzione standard" },
+  "timeSavedComparedToIntrinsic": { "message": "Velocità media effettiva rispetto alla velocità normale 1×" },
+  "timeSavedComparedToSoundedAbs": { "message": "Tempo risparmiato rispetto alla riproduzione alla velocità standard" },
+  "timeSavedComparedToIntrinsicAbs": { "message": "Tempo risparmiato rispetto alla riproduzione normale a 1×" },
+  "wouldHaveLastedIfSpeedWasSounded": { "message": "Durata che avrebbe avuto la riproduzione alla velocità standard senza accelerare i silenzi" },
+  "wouldHaveLastedIfSpeedWasIntrinsic": { "message": "Durata che avrebbe avuto la riproduzione a 1× senza accelerare i silenzi" },
+  "timeSavedPercentage": { "message": "Percentuale di tempo risparmiato" },
+  "comparedToSounded": { "message": "rispetto alla velocità standard" },
+  "comparedToSoundedWithoutSkipping": {
+    "message": "Rispetto alla semplice riproduzione a $speed$ senza accelerare i silenzi",
+    "placeholders": { "speed": { "content": "$1", "example": "1,5×" } }
   },
-  "transientNoiseFilterEnabledTooltip": {
-    "message": "Ignora suoni brevi e improvvisi (es. tap sul microfono, click tastiera) più brevi della durata minima. Evita che interrompano la velocizzazione dei silenzi."
+  "comparedToIntrinsicWithoutSkipping": { "message": "Rispetto alla semplice riproduzione normale a 1× senza accelerare i silenzi" },
+  "comparedToIntrinsic": { "message": "rispetto alla velocità normale 1×" },
+  "estimatedRemainingDuration": { "message": "Durata reale rimanente stimata:" },
+  "noSuitableElement": { "message": "Non è stato trovato un contenuto audio o video compatibile nella pagina" },
+  "retry": { "message": "Riprova" },
+  "alsoSearchFor": {
+    "message": "Cerca anche elementi $type$",
+    "placeholders": { "type": { "content": "$1", "example": "audio" } }
   },
-  "transientNoiseFilterMinSoundedDurationMs": {
-    "message": "Durata minima suono (ms)"
+  "changeElementSearchCriteria": { "message": "Modifica i criteri di ricerca…" },
+  "audio": { "message": "audio" },
+  "video": { "message": "video" },
+  "contentScriptFail": { "message": "Non è stato possibile avviare l’estensione in questa pagina" },
+  "suggestOpenLocalFile": {
+    "message": "Vuoi **$openLocalFile$**?",
+    "placeholders": { "openLocalFile": { "content": "$1", "example": "aprire un file locale" } }
   },
-  "transientNoiseFilterMinSoundedDurationMsTooltip": {
-    "message": "Suoni brevi al di sotto di questo valore (in millisecondi) vengono ignorati. Default: 30ms."
+  "openLocalFile": { "message": "aprire un file locale" },
+  "loading": { "message": "Caricamento" },
+  "useExperimentalAlgorithm": { "message": "Usa l’algoritmo di clonazione precedente" },
+  "useExperimentalAlgorithmTooltip": { "message": "L’algoritmo stretching è quello consigliato.\n\nLa clonazione precedente è disponibile solo per compatibilità e confronto." },
+  "mediaUnsupported": {
+    "message": "Questo contenuto **potrebbe non essere supportato** — $consequences$.",
+    "placeholders": { "consequences": { "content": "$1", "example": "potrebbe diventare muto" } }
   },
-  "soundedSpeed": {
-    "message": "Velocita di riproduzione"
+  "couldGetMuted": { "message": "potrebbe diventare muto se l’estensione viene collegata" },
+  "silenceSkippingWontWork": { "message": "l’accelerazione dei silenzi potrebbe non funzionare correttamente" },
+  "tryOpeningDirectly": { "message": "Prova ad aprirlo direttamente" },
+  "or": { "message": "Oppure" },
+  "tryAttachAnyway": { "message": "Prova comunque a collegare l’estensione" },
+  "refreshIfMuted": { "message": "Ricarica la pagina se il contenuto è diventato muto" },
+  "volumeThreshold": { "message": "Soglia audio minima velocizzazione" },
+  "volumeThresholdTooltip": { "message": "Quando il volume corrente è inferiore a questo valore, la riproduzione viene accelerata.\nNel grafico corrisponde alla linea orizzontale rossa. Se il volume si trova sotto la linea rossa, la sezione viene considerata silenziosa." },
+  "soundedSpeed": { "message": "Velocità di riproduzione standard" },
+  "soundedSpeedTooltip": { "message": "Velocità utilizzata quando il contenuto non è silenzioso, cioè durante la normale riproduzione." },
+  "silenceSpeed": { "message": "Velocità di riproduzione in silenzio" },
+  "silenceSpeedTooltip": {
+    "message": "Velocità utilizzata durante le sezioni silenziose.$relativeNote$",
+    "placeholders": { "relativeNote": { "content": "$1" } }
   },
-  "soundedSpeedTooltip": {
-    "message": "La velocita a cui riproduciamo il video quando NON e silenzioso, cioe la normale velocita di riproduzione.\nNel grafico, le parti riprodotte a questa velocita hanno sfondo verde 🟩."
-  }
+  "muteSilences": { "message": "Disattiva l’audio durante i silenzi" },
+  "transientNoiseFilterEnabled": { "message": "Filtro rumori transitori" },
+  "transientNoiseFilterEnabledTooltip": { "message": "Ignora i suoni forti molto brevi, come tocchi sul microfono o clic della tastiera, evitando che interrompano la velocizzazione del silenzio." },
+  "transientNoiseFilterMinSoundedDurationMs": { "message": "Durata minima del suono (ms)" },
+  "transientNoiseFilterMinSoundedDurationMsTooltip": { "message": "I suoni più brevi di questo valore vengono ignorati. Valore predefinito: 30 ms." },
+  "silenceSpeedTooltipRelativeNote": { "message": "\nIl valore è un moltiplicatore della velocità standard: per esempio, 1,5× standard e 2× silenzio producono una velocità effettiva di 3×." },
+  "relativeToSounded": { "message": "relativa alla velocità standard" },
+  "absolute": { "message": "assoluta" },
+  "marginBefore": { "message": "Margine prima" },
+  "marginBeforeTooltip": { "message": "Indica quanto tempo prima dell’inizio del parlato la riproduzione deve tornare alla velocità standard. Aiuta a mantenere udibili le prime lettere delle parole." },
+  "marginAfter": { "message": "Margine dopo" },
+  "marginAfterTooltip": { "message": "Indica quanto attendere dopo la fine del parlato prima di accelerare. Aiuta a mantenere udibili le ultime lettere e una separazione naturale tra le parole." },
+  "fileInputLabel": { "message": "Trascina qui uno o più file\noppure fai clic per selezionarli" },
+  "general": { "message": "Generali" },
+  "wheneverPlaybackRateChangesFromOtherScripts": { "message": "Quando altri script modificano la velocità di riproduzione" },
+  "updateSoundedSpeedWheneverItChangesOnWebsite": { "message": "Consenti al sito o ad altre estensioni di modificare la velocità standard" },
+  "preventOtherScriptsFromChangingPlaybackRate": { "message": "Impedisci ad altri script di modificare la velocità impostata da questa estensione" },
+  "doNothingWheneverPlaybackRateChanges": { "message": "Ignora le modifiche alla velocità effettuate da altri script" },
+  "applyTo": { "message": "Applica a" },
+  "none": { "message": "Nessuno" },
+  "applyToOnly": {
+    "message": "Solo elementi $type$",
+    "placeholders": { "type": { "content": "$1", "example": "video" } }
+  },
+  "applyToBoth": { "message": "Elementi video e audio" },
+  "omitMutedElements": { "message": "Non applicare ai contenuti multimediali disattivati" },
+  "silenceSpeedSpecificationMethod": { "message": "Modalità di calcolo della velocità in silenzio" },
+  "absoluteSilenceSpeedClarification": { "message": " rispetto alla velocità normale 1×" },
+  "enableDesyncCorrection": { "message": "Correggi automaticamente la desincronizzazione audio-video" },
+  "useSeparateMarginSettingsForDifferentAlgorithms": { "message": "Usa impostazioni separate per i diversi algoritmi" },
+  "hotkeys": { "message": "Scorciatoie da tastiera" },
+  "hotkey": { "message": "Scorciatoia" },
+  "enableHotkeys": { "message": "Abilita le scorciatoie da tastiera" },
+  "hotkeysNotes": {
+    "message": "Sono supportati i tasti modificatori Ctrl, Maiusc e altri.\nÈ possibile associare più azioni allo stesso tasto.\nL’azione \"$switch$\" alterna il valore precedente e quello indicato, mentre \"imposta\" usa sempre il valore indicato.\nLe scorciatoie funzionano anche quando la finestra dell’estensione è aperta.",
+    "placeholders": { "switch": { "content": "$1", "example": "alterna" } }
+  },
+  "switch": { "message": "alterna" },
+  "rewind": { "message": "Riavvolgi (secondi)" },
+  "advance": { "message": "Avanza (secondi)" },
+  "togglePause": { "message": "Pausa/riprendi" },
+  "toggleMute": { "message": "Disattiva/riattiva audio" },
+  "decreaseVolume": { "message": "Riduci volume (%)" },
+  "increaseVolume": { "message": "Aumenta volume (%)" },
+  "action": { "message": "Azione" },
+  "value": { "message": "Valore" },
+  "overrideWebsiteHotkeys": { "message": "Sostituisci le scorciatoie del sito" },
+  "removeBinding": { "message": "Rimuovi scorciatoia" },
+  "addBinding": { "message": "Aggiungi scorciatoia" },
+  "openPopup": { "message": "Apri la finestra dell’estensione" },
+  "edit": { "message": "Modifica" },
+  "popup": { "message": "Finestra dell’estensione" },
+  "chart": { "message": "Grafico" },
+  "chartLengthInSeconds": { "message": "Secondi visibili nel grafico" },
+  "chartJumpPeriod": { "message": "Intervallo di avanzamento del grafico (%)" },
+  "chartWidthPx": { "message": "Larghezza (pixel)" },
+  "chartHeightPx": { "message": "Altezza (pixel)" },
+  "chartSpeed": { "message": "Velocità di scorrimento" },
+  "chartSpeedIntrinsicTime": { "message": "Uguale alla velocità corrente del video" },
+  "chartSpeedSoundedSpeedTime": { "message": "Relativa alla velocità di riproduzione standard" },
+  "chartSpeedRealTime": { "message": "Costante, in tempo reale" },
+  "rangeSlidersAttributes": { "message": "Intervalli dei cursori" },
+  "rangeSlidersAttributesNote": { "message": "L’estensione limita la riproduzione in silenzio a un massimo di 8×. Imposta il valore minimo, massimo e l’incremento dei cursori mostrati nella finestra dell’estensione." },
+  "min": { "message": "Minimo" },
+  "max": { "message": "Massimo" },
+  "step": { "message": "Incremento" },
+  "input": { "message": "Controllo" },
+  "disableHotkeysWhileInputFocused": { "message": "Disabilita le scorciatoie mentre un campo è selezionato" },
+  "autofocusEnabledInput": {
+    "message": "Seleziona automaticamente la casella \"$enableCheckboxLabel$\" all’apertura",
+    "placeholders": { "enableCheckboxLabel": { "content": "$1", "example": "Abilita" } }
+  },
+  "alwaysShowOpenLocalFileLink": {
+    "message": "Mostra il collegamento \"$openLocalFileLabel$\"",
+    "placeholders": { "openLocalFileLabel": { "content": "$1", "example": "apri un file locale" } }
+  },
+  "popupSpecificHotkeys": { "message": "Scorciatoie della finestra dell’estensione" },
+  "timeSavedAveragingMethod": { "message": "Metodo di calcolo del tempo risparmiato" },
+  "timeSavedAveragingMethodAllTime": { "message": "Totale cumulativo" },
+  "timeSavedAveragingMethodExponential": { "message": "Dai maggiore importanza ai dati recenti" },
+  "timeSavedAveragingWindowLength": { "message": "Considera gli ultimi N secondi di riproduzione" },
+  "timeSavedExponentialAveragingLatestDataWeight": { "message": "Peso assegnato al periodo più recente" },
+  "timeSavedDataWeightDecayTimeConstant": {
+    "message": "Tempo di dimezzamento del peso dei dati: $length$ secondi",
+    "placeholders": { "length": { "content": "$1", "example": "138,83" } }
+  },
+  "iconBadge": { "message": "Indicatore sull’icona dell’estensione" },
+  "badgeWhatSettingToDisplayByDefault": { "message": "Valore da mostrare sull’icona" },
+  "meta": { "message": "Gestione impostazioni" },
+  "downloadFromSync": { "message": "Applica le impostazioni sincronizzate" },
+  "uploadToSync": { "message": "Sincronizza le impostazioni correnti" },
+  "resetToDefaults": { "message": "Ripristina le impostazioni predefinite" },
+  "about": { "message": "Informazioni e codice sorgente" },
+  "license": { "message": "Licenza" },
+  "helpTranslate": { "message": "Aiuta a tradurre" },
+  "donate": { "message": "Dona" },
+  "contact": { "message": "Contatti" },
+  "chat": { "message": "Chat" },
+  "runSnowflakeBridge": { "message": "Aiuta altre persone ad aggirare la censura installando un’altra estensione" },
+  "saving": { "message": "Salvataggio…" },
+  "saved": { "message": "Salvato" },
+  "hasErrors": { "message": "Sono presenti errori" },
+  "showErrors": { "message": "Mostra gli errori" },
+  "increaseSettingValue": { "message": "Aumenta" },
+  "decreaseSettingValue": { "message": "Riduci" },
+  "setSettingValue": { "message": "Imposta" },
+  "toggleSettingValue": { "message": "Alterna" }
 }

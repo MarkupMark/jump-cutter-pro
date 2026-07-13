@@ -87,7 +87,7 @@
 		"message": "Déposez un ou plusieurs fichiers ici\nou cliquez pour sélectionner"
 	},
 	"extensionDescription": {
-		"message": "Regardez des vidéos jusqu'à 2x plus rapidement en sautant automatiquement les longues pauses entre les phrases"
+		"message": "Accélère jusqu’à 8× les passages silencieux des vidéos et contenus audio, tout en préservant la clarté de la parole"
 	},
 	"timeSavedComparedToSounded": {
 		"message": "En moyenne la vitesse de lecture effective de la vidéo par rapport à la vitesse sondée"
@@ -332,7 +332,7 @@
 		"message": "Période de saut, %. Cette valeur est exprimée en tant que fraction de la longueur de la carte. Régler à 0 pour un mouvement fluide (pas de sauts)."
 	},
 	"rangeSlidersAttributesNote": {
-		"message": "Sachez que les navigateurs ne prennent pas en charge les taux de lecture au-delà d'une certaine limite.\nÀ la rédaction de ce texte, cette limite est de 16 pour Chromium (Chrome, Edge) et de 8 (par défaut) pour Gecko (Firefox)."
+		"message": "L’extension limite la lecture pendant les silences à un maximum de 8×. Configurez les valeurs minimale et maximale ainsi que le pas des curseurs de la fenêtre."
 	},
 	"chartHeightPx": {
 		"message": "Hauteur (pixels)"
